@@ -1,0 +1,66 @@
+{
+  "Exposes": [
+    {
+      "Type": "xyz.openbmc_project.Configuration.PIDAutotuneBasic",
+      "pollInterval": 1,
+      "stablecount": 20,
+      "truncatedecimals": 0,
+      "maxiterations": 20000
+    },
+    {
+      "Type": "xyz.openbmc_project.Configuration.PIDAutotuneSensor",
+      "Name": "CPU_TEMP",
+      "tempxinputpath": "/sys/class/hwmon/hwmon0/temp1_input",
+      "setpoint": 79,
+      "type": "temp"
+    },
+    {
+      "Type": "xyz.openbmc_project.Configuration.PIDAutotuneSensor",
+      "Name": "SYS_FAN1_ROTOR1",
+      "pwmxpath": "/sys/class/hwmon/hwmon1/pwm1",
+      "fanxinputpath": "/sys/class/hwmon/hwmon1/fan1_input",
+      "minduty": 40,
+      "maxduty": 200,
+      "type": "fan"
+    },
+    {
+      "Type": "xyz.openbmc_project.Configuration.PIDAutotuneSensor",
+      "Name": "SYS_FAN2_ROTOR1",
+      "pwmxpath": "/sys/class/hwmon/hwmon1/pwm2",
+      "fanxinputpath": "/sys/class/hwmon/hwmon1/fan2_input",
+      "minduty": 40,
+      "maxduty": 200
+    },
+    {
+      "Type": "xyz.openbmc_project.Configuration.PIDAutotuneExperiment",
+      "basedutylog": "/var/lib/autotune/log/base_duty_log.txt",
+      "tol": 5,
+      "stepoutsidetol": 2,
+      "stepinsidetol": 1,
+      "priority": 2,
+      "enable": true,
+      "type": "baseduty"
+    },
+    {
+      "Type": "xyz.openbmc_project.Configuration.PIDAutotuneExperiment",
+      "stepdutylog": "/var/lib/autotune/log/step_trigger_log.txt",
+      "stepduty": 25,
+      "priority": 1,
+      "enable": true,
+      "type": "steptrigger"
+    },
+    {
+      "Type": "xyz.openbmc_project.Configuration.PIDAutotuneProcessModel",
+      "fopdtlog": "/var/lib/autotune/log/fopdt_log.txt",
+      "lambdafactor": [0.5, 1.0, 1.5, 2.0],
+      "priority": 1,
+      "type": "fopdt"
+    },
+    {
+      "Type": "xyz.openbmc_project.Configuration.PIDAutotuneTuningMethod",
+      "imcpidlog": "/var/lib/autotune/log/imc_pid_log.txt",
+      "enable": true,
+      "type": "imc"
+    }
+  ]
+}
