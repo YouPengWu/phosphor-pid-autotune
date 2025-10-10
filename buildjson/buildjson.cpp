@@ -6,7 +6,6 @@
 
 #include <fstream>
 #include <stdexcept>
-#include <unordered_map>
 
 namespace j = nlohmann;
 
@@ -66,7 +65,7 @@ Config loadConfigFromJsonFile(const std::string& jsonPath)
                                  ? defaultInfo
                                  : out.basic.sensorInfoPath);
 
-    // ===== sensors: NEW style first ("fansensors","tempsensors") =====
+    // ===== NEW style: "fansensors" / "tempsensors" =====
     bool parsedNew = false;
 
     if (root.contains("fansensors") && root["fansensors"].is_array())
@@ -75,8 +74,7 @@ Config loadConfigFromJsonFile(const std::string& jsonPath)
         {
             FanChannel f{};
             f.name = s.value("Name", "FAN");
-            f.pwmPath = s.value("pwmxpath", "");
-            f.tachPath = s.value("fanxinputpath", "");
+            f.input = s.value("input", "");
             f.minDuty = s.value("minduty", 0);
             f.maxDuty = s.value("maxduty", 255);
             out.fans.push_back(f);
@@ -87,15 +85,14 @@ Config loadConfigFromJsonFile(const std::string& jsonPath)
     if (root.contains("tempsensors") && root["tempsensors"].is_array() &&
         !root["tempsensors"].empty())
     {
-        const auto& ts = root["tempsensors"].at(0); // exactly one temp sensor
+        const auto& ts = root["tempsensors"].at(0); // exactly one temp
         out.temp.name = ts.value("Name", "CPU_TEMP");
-        out.temp.inputPath = ts.value("tempxinputpath", "");
+        out.temp.input = ts.value("input", "");
         out.temp.setpoint = ts.value("setpoint", 70.0);
-        out.temp.type = ts.value("type", "temp");  // logical category
-        out.temp.sensorType =
-            ts.value("sensortype", std::string{}); // physical type
+        out.temp.type = ts.value("type", "temp");
+        out.temp.sensorType = ts.value("sensortype", std::string{});
 
-        // Explicit overrides take precedence over lookups
+        // Overrides
         if (ts.contains("qstepc"))
             out.temp.qStepC = ts.value("qstepc", out.temp.qStepC);
         if (ts.contains("accuracyc"))
@@ -116,7 +113,7 @@ Config loadConfigFromJsonFile(const std::string& jsonPath)
         parsedNew = true;
     }
 
-    // ===== legacy fallback: "sensors" mixed array =====
+    // ===== Legacy fallback: "sensors" mixed array =====
     if (!parsedNew)
     {
         if (!root.contains("sensors") || !root["sensors"].is_array())
@@ -129,7 +126,8 @@ Config loadConfigFromJsonFile(const std::string& jsonPath)
             if (type == "temp")
             {
                 out.temp.name = s.value("Name", "CPU_TEMP");
-                out.temp.inputPath = s.value("tempxinputpath", "");
+                // Derive input from Name if not provided
+                out.temp.input = s.value("input", out.temp.name);
                 out.temp.setpoint = s.value("setpoint", 70.0);
                 out.temp.type = "temp";
                 out.temp.sensorType = s.value("sensortype", std::string{});
@@ -158,8 +156,7 @@ Config loadConfigFromJsonFile(const std::string& jsonPath)
             {
                 FanChannel f{};
                 f.name = s.value("Name", "FAN");
-                f.pwmPath = s.value("pwmxpath", "");
-                f.tachPath = s.value("fanxinputpath", "");
+                f.input = s.value("input", f.name); // derive from Name
                 f.minDuty = s.value("minduty", 0);
                 f.maxDuty = s.value("maxduty", 255);
                 out.fans.push_back(f);
@@ -210,9 +207,7 @@ Config loadConfigFromJsonFile(const std::string& jsonPath)
                     if (p["lambdafactor"].is_array())
                     {
                         for (const auto& lf : p["lambdafactor"])
-                        {
                             cfg.lambdaFactors.push_back(lf.get<double>());
-                        }
                     }
                     else
                     {
@@ -250,10 +245,10 @@ Config loadConfigFromJsonFile(const std::string& jsonPath)
     }
 
     // ===== validation =====
-    if (out.fans.empty() || out.temp.inputPath.empty())
+    if (out.fans.empty() || out.temp.input.empty())
     {
         throw std::runtime_error(
-            "Invalid sensors: require at least one fan and one temp sensor");
+            "Invalid sensors: require at least one fan and one temp sensor (with 'input').");
     }
 
     return out;

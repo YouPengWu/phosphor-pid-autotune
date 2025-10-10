@@ -1,12 +1,13 @@
 #include "step_trigger.hpp"
 
+#include "../core/dbus_io.hpp"
 #include "../core/numeric.hpp"
 #include "../core/steady_state.hpp"
-#include "../core/sysfs_io.hpp"
 #include "../core/time_utils.hpp"
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 
@@ -26,24 +27,26 @@ StepResponse runStepTrigger(const autotune::Config& cfg, int baseDutyRaw)
     const auto& e = *cfg.stepTrigger;
     const int poll = std::max(1, cfg.basic.pollIntervalSec);
 
-    std::vector<std::string> pwmPaths;
-    pwmPaths.reserve(cfg.fans.size());
+    // Gather DBus fan "inputs" so we can broadcast the PWM step to all of them.
+    std::vector<std::string> inputs;
+    inputs.reserve(cfg.fans.size());
     for (const auto& f : cfg.fans)
-        pwmPaths.push_back(f.pwmPath);
+        inputs.push_back(f.input);
 
-    auto applyDuty = [&](int raw) { sysfs::writePwmAll(pwmPaths, raw); };
+    auto applyDuty = [&](int raw) {
+        (void)dbusio::writePwmAllByInput(inputs, raw);
+    };
 
     // Regression-based steady detector (quantization-aware).
     steady::SteadyStateDetector ss(
         std::max(2, cfg.basic.steadyWindow), static_cast<double>(poll),
         cfg.basic.steadySlopeThresholdPerSec, cfg.basic.steadyRmseThreshold,
-        cfg.temp.qStepC /* °C/LSB */
-    );
+        cfg.temp.qStepC);
 
     const double spTrunc = numeric::truncateDecimals(
         cfg.temp.setpoint, cfg.basic.truncateDecimals);
 
-    // Dynamic error band for pre-step condition.
+    // Pre-step requirement needs a setpoint band.
     const double quantFloor = cfg.temp.qStepC / std::sqrt(12.0);
     double errBand = std::max(cfg.temp.accuracyC, quantFloor);
     if (cfg.basic.steadySetpointBand > 0.0)
@@ -52,6 +55,28 @@ StepResponse runStepTrigger(const autotune::Config& cfg, int baseDutyRaw)
     int pwm = std::clamp(baseDutyRaw, 0, 255);
     applyDuty(pwm);
 
+    // Optional CSV log for step response; write as we go.
+    std::ofstream log;
+    if (!e.logPath.empty())
+    {
+        try
+        {
+            std::filesystem::create_directories(
+                std::filesystem::path(e.logPath).parent_path());
+            log.open(e.logPath, std::ios::out | std::ios::trunc);
+            if (log.is_open())
+            {
+                log << "t_index,temp_trunc,pwm\n";
+                log.flush();
+            }
+        }
+        catch (const std::exception& ex)
+        {
+            std::cerr << "[autotune] StepTrigger log open failed: " << ex.what()
+                      << "\n";
+        }
+    }
+
     int i = 0;
     bool jumped = false;
 
@@ -59,16 +84,22 @@ StepResponse runStepTrigger(const autotune::Config& cfg, int baseDutyRaw)
     {
         timeutil::sleepSeconds(poll);
 
-        double temp = sysfs::readTempC(cfg.temp.inputPath);
+        double temp = dbusio::readTempCByInput(cfg.temp.input);
         temp = numeric::truncateDecimals(temp, cfg.basic.truncateDecimals);
 
         out.samples.emplace_back(i, temp, pwm);
         ss.push(temp);
 
+        // Stream each sample to log immediately.
+        if (log.is_open())
+        {
+            log << i << "," << temp << "," << pwm << "\n";
+            log.flush();
+        }
+
         if (!jumped)
         {
-            // Pre-step requirement:
-            // (A) steady by slope+RMSE AND (B) mean within setpoint ± errBand.
+            // Pre-step condition: steady AND near setpoint band.
             const bool steady = ss.isSteady();
             const auto ws = ss.stats();
             const bool meanNearSP = (ws.n >= cfg.basic.steadyWindow) &&
@@ -76,22 +107,21 @@ StepResponse runStepTrigger(const autotune::Config& cfg, int baseDutyRaw)
 
             if (steady && meanNearSP)
             {
-                // Apply step once pre-step conditions are met.
+                // Apply the step once pre-step conditions are satisfied.
                 pwm = std::clamp(baseDutyRaw + e.stepDuty, 0, 255);
                 applyDuty(pwm);
 
-                // Reset detector; post-step only requires steady state.
+                // Reset detector; post-step uses steady-only.
                 ss.reset();
                 jumped = true;
             }
         }
         else
         {
-            // Post-step stop criterion: steady only (we expect offset from SP).
+            // Post-step stop condition: steady only (the mean can be away from
+            // SP).
             if (ss.isSteady())
-            {
                 break;
-            }
         }
 
         ++i;

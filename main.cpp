@@ -20,6 +20,7 @@
 #include <iostream>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <variant>
 #include <vector>
@@ -48,6 +49,7 @@ static void writePidOut(const std::string& path,
         ofs << "lambda=" << lam << ",Kp=" << g.Kp << ",Ki=" << g.Ki
             << ",Kd=" << g.Kd << "\n";
     }
+    ofs.flush();
 }
 
 // Fire-and-forget systemctl call.
@@ -57,31 +59,113 @@ static void systemctl(const char* cmd)
     (void)rc;
 }
 
-// Sanity-check all sensor paths before running experiments.
-// If any required path is missing, log and return false to abort early.
-static bool checkSensorPaths(const autotune::Config& cfg)
+/**
+ * @brief Return parent directory of a path, or empty string if input is empty.
+ */
+static std::string parentDir(const std::string& path)
 {
-    bool ok = true;
+    if (path.empty())
+        return {};
+    return std::filesystem::path(path).parent_path().string();
+}
 
-    auto check = [&](const std::string& p, const char* tag) {
-        if (p.empty() || !std::filesystem::exists(p))
-        {
-            std::cerr << "[autotune] MISSING " << tag << ": " << p << "\n";
-            ok = false;
-        }
-    };
+/**
+ * @brief Safety check to avoid deleting arbitrary system directories.
+ *
+ * Only allow purge when the directory string contains "autotune"
+ * (case-sensitive) and is at least two levels deep (e.g.,
+ * /var/lib/autotune/log).
+ */
+static bool isSafeLogDir(const std::string& dir)
+{
+    if (dir.empty())
+        return false;
 
-    // Temperature input path
-    check(cfg.temp.inputPath, "temp input");
+    // Must contain "autotune" to be considered a log directory we own.
+    if (dir.find("autotune") == std::string::npos)
+        return false;
 
-    // Each fan pwm/tach path
-    for (const auto& f : cfg.fans)
+    // Require path depth >= 3 to avoid "/" or "/var" accidents.
+    size_t depth = 0;
+    for (const auto& part : std::filesystem::path(dir))
     {
-        check(f.pwmPath, "fan pwm");
-        check(f.tachPath, "fan tach");
+        (void)part;
+        ++depth;
+    }
+    return depth >= 3;
+}
+
+/**
+ * @brief Purge (delete files) inside given directory, then recreate the
+ * directory.
+ *
+ * Only regular files are deleted. Subdirectories are left intact.
+ * If directory does not exist, it will be created.
+ */
+static void purgeLogDirectory(const std::string& dir)
+{
+    if (dir.empty())
+        return;
+
+    if (!isSafeLogDir(dir))
+    {
+        std::cerr << "[autotune] REFUSE to purge non-safe dir: " << dir << "\n";
+        return;
     }
 
-    return ok;
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    if (ec)
+    {
+        std::cerr << "[autotune] create_directories failed: " << dir
+                  << " ec=" << ec.message() << "\n";
+        return;
+    }
+
+    // Remove only regular files in the top-level of the log directory.
+    for (const auto& entry : std::filesystem::directory_iterator(dir, ec))
+    {
+        if (ec)
+        {
+            std::cerr << "[autotune] list dir failed: " << dir
+                      << " ec=" << ec.message() << "\n";
+            break;
+        }
+        if (entry.is_regular_file())
+        {
+            std::filesystem::remove(entry.path(), ec);
+            if (ec)
+            {
+                std::cerr << "[autotune] remove file failed: " << entry.path()
+                          << " ec=" << ec.message() << "\n";
+            }
+        }
+    }
+}
+
+/**
+ * @brief Purge all log directories inferred from the Config.
+ *
+ * We gather parent directories of known log files (baseduty, step, fopdt, imc),
+ * deduplicate them, and purge each safely.
+ */
+static void purgeAllLogDirsFromConfig(const autotune::Config& cfg)
+{
+    std::set<std::string> dirs;
+
+    if (cfg.baseDuty && !cfg.baseDuty->logPath.empty())
+        dirs.insert(parentDir(cfg.baseDuty->logPath));
+    if (cfg.stepTrigger && !cfg.stepTrigger->logPath.empty())
+        dirs.insert(parentDir(cfg.stepTrigger->logPath));
+    if (cfg.fopdt && !cfg.fopdt->logPath.empty())
+        dirs.insert(parentDir(cfg.fopdt->logPath));
+    if (cfg.imc && !cfg.imc->logPath.empty())
+        dirs.insert(parentDir(cfg.imc->logPath));
+
+    for (const auto& d : dirs)
+    {
+        purgeLogDirectory(d);
+    }
 }
 
 int main(int argc, char** argv)
@@ -203,16 +287,11 @@ int main(int argc, char** argv)
             }
         }
 
-        // Abort early if sensors are missing to avoid infinite loops in
-        // experiments.
-        if (!checkSensorPaths(*cfg))
-        {
-            std::cerr << "[autotune] abort: sensor paths missing\n";
-            return;
-        }
-
         if (shouldCancel())
             return;
+
+        // Purge all known log directories so the new run starts clean.
+        purgeAllLogDirsFromConfig(*cfg);
 
         // Experiments (by priority). Start with a reasonable base.
         int baseDutyRaw = 0;
@@ -269,6 +348,7 @@ int main(int argc, char** argv)
                                       std::ios::out | std::ios::trunc);
                     ofs << "K=" << fopdt->K << ",T=" << fopdt->T
                         << ",L=" << fopdt->L << "\n";
+                    ofs.flush();
                 }
                 catch (...)
                 {
@@ -330,11 +410,12 @@ int main(int argc, char** argv)
 
             if (auto pval = std::get_if<bool>(&it->second))
             {
-                enabled = *pval; // update local cache mainly for debug logs
+                bool enabledLocal = *pval;
+                // Update local cache mainly for debug logs
                 std::cerr << "[autotune] PropertiesChanged: Enabled="
-                          << (enabled ? "true" : "false") << "\n";
+                          << (enabledLocal ? "true" : "false") << "\n";
 
-                if (enabled)
+                if (enabledLocal)
                 {
                     if (!running)
                         boost::asio::post(io, runOnce);
@@ -349,6 +430,9 @@ int main(int argc, char** argv)
                     cancelRequested.store(true, std::memory_order_relaxed);
                     systemctl("systemctl start phosphor-pid-control");
                 }
+
+                // Keep mirror value for debug (not strictly needed)
+                enabled = enabledLocal;
             }
         });
 

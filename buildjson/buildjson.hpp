@@ -30,7 +30,7 @@ struct BasicSettings
 struct TempSensor
 {
     std::string name;
-    std::string inputPath;
+    std::string input;      // D-Bus input key (e.g., "CPU0_TEMP")
     std::string type;       // logical category, e.g., "temp"
     std::string sensorType; // physical type, e.g., "tmp75"
     double setpoint{};      // °C
@@ -45,10 +45,9 @@ struct TempSensor
 struct FanChannel
 {
     std::string name;
-    std::string pwmPath;
-    std::string tachPath;
-    int minDuty{}; // 0-255
-    int maxDuty{}; // 0-255
+    std::string input; // D-Bus input key (e.g., "PWM_FAN1")
+    int minDuty{};     // 0-255
+    int maxDuty{};     // 0-255
 };
 
 struct BaseDutyExperimentCfg

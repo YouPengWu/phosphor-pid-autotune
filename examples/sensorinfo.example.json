@@ -1,28 +1,9 @@
 {
-  // Database of physical temperature sensor specs.
-  // Referenced by tempsensors[i].sensortype in autotune.json (or EntityManager).
-  "tempsensorinfo": [
-    {
-      // TMP75 family (12-bit typical)
-      "type": "tmp75",
-
-      // Quantization step (°C per LSB). Used to compute quantization noise floor q/sqrt(12).
-      "q": 0.0625,
-
-      // Typical absolute accuracy in °C. Drives the setpoint proximity band.
-      "accuracy_c": 0.5,
-
-      // Informational fields:
-      "bits": 12,
-      "tconv_ms": 220
-    },
-    {
-      // LM75 family (11-bit typical)
-      "type": "lm75",
-      "q": 0.125,
-      "accuracy_c": 1.0,
-      "bits": 11,
-      "tconv_ms": 100
-    }
-  ]
+  "sensorinfo": {
+    "//": "Central temperature sensor capability table. Extend as needed.",
+    "tempsensorinfo": [
+      { "type": "tmp75", "q": 0.0625, "accuracy": 0.5, "bits": 12, "tconv_ms": 220 },
+      { "type": "lm75",  "q": 0.125,  "accuracy": 1.0, "bits": 11, "tconv_ms": 100 }
+    ]
+  }
 }

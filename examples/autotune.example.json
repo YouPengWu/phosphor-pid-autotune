@@ -1,101 +1,73 @@
 {
   "basic settings": [
     {
-      // Sampling period in seconds
+      "//": "Sampling every 1s; total iteration guard; regression window=20.",
       "pollInterval": 1,
-
-      // Truncate temperature decimals BEFORE processing (e.g., for noise shaping)
-      "truncatedecimals": 2,
-
-      // Hard cap to avoid infinite loops
+      "truncatedecimals": 0,
       "maxiterations": 20000,
 
-      // Regression-based steady-state thresholds (slope in °C/s, RMSE in °C)
-      "steadyslope": 0.025,
-      "steadyrmse": 0.10,
-
-      // Sliding window size for regression/RMSE (number of samples)
+      "// slope/rmse floors; effective threshold is max(user, sensor-floor).":
+      0,
+      "steadyslope": 0.02,
+      "steadyrmse": 0.2,
       "steadywindow": 20,
 
-      // Optional extra band (°C) added on top of sensor accuracy; 0 disables it
-      "steadysetpointband": 0.0,
-
-      // External DB for sensor specs (q, accuracy, bits, tconv)
-      "sensorinfopath": "/etc/phosphor-pid-autotune/sensorinfo.json"
+      "// add extra ±band around setpoint (°C) if desired; 0 disables.":
+      0,
+      "steadysetpointband": 0.0
     }
   ],
 
-  // Fan channels (same duty applied during base duty search)
   "fansensors": [
-    {
-      "Name": "SYS_FAN1_ROTOR1",
-      "pwmxpath": "/sys/class/hwmon/hwmon1/pwm1",
-      "fanxinputpath": "/sys/class/hwmon/hwmon1/fan1_input",
-      "minduty": 40,   // start from max of all fans' minduty
-      "maxduty": 200   // safety clamp for PWM raw value
-    },
-    {
-      "Name": "SYS_FAN2_ROTOR1",
-      "pwmxpath": "/sys/class/hwmon/hwmon1/pwm2",
-      "fanxinputpath": "/sys/class/hwmon/hwmon1/fan2_input",
-      "minduty": 40,
-      "maxduty": 200
-    }
+    { "Name": "SYS_FAN1_ROTOR1", "input": "PWM_FAN1", "minduty": 40, "maxduty": 200 },
+    { "Name": "SYS_FAN1_ROTOR2", "input": "PWM_FAN1", "minduty": 40, "maxduty": 200 }
   ],
 
-  // Exactly one temperature sensor
   "tempsensors": [
     {
-      "Name": "CPU_TEMP",
-      "tempxinputpath": "/sys/class/hwmon/hwmon0/temp1_input",
+      "Name": "CPU0_TEMP",
+      "input": "CPU0_TEMP",
       "setpoint": 79,
-      "type": "temp",        // logical category (kept for compatibility)
-      "sensortype": "tmp75", // physical type → lookup q & accuracy in sensorinfo
-
-      // Optional explicit overrides (if present, they override sensortype lookup):
-      // "qstepc": 0.0625,     // °C per LSB (quantization step)
-      // "accuracyc": 0.5      // typical absolute accuracy (°C)
+      "type": "temp",
+      "sensortype": "tmp75",
+      "// optional overrides if different from DB defaults":
+      "qstepc": 0.0625,
+      "accuracyc": 0.5
     }
   ],
 
   "experiment": [
     {
-      // Base duty search: convergence requires
-      // (A) steady by slope+RMSE, and (B) mean within setpoint ± errBand,
-      // where errBand = max(accuracy, q/sqrt(12)).
+      "type": "baseduty",
       "basedutylog": "/var/lib/autotune/log/base_duty_log.txt",
-      "stepoutsidetol": 2, // duty step when |error| > errBand
-      "stepinsidetol": 1,  // duty step when 0 < |error| ≤ errBand
+      "stepoutsidetol": 2,
+      "stepinsidetol": 1,
       "priority": 2,
-      "enable": true,
-      "type": "baseduty"
+      "enable": true
     },
     {
-      // Step experiment:
-      // Pre-step: require (A) steady and (B) mean within setpoint ± errBand.
-      // Post-step: only require steady (mean can deviate from setpoint).
+      "type": "steptrigger",
       "stepdutylog": "/var/lib/autotune/log/step_trigger_log.txt",
-      "stepduty": 25, // PWM raw step
+      "stepduty": 25,
       "priority": 1,
-      "enable": true,
-      "type": "steptrigger"
+      "enable": true
     }
   ],
 
   "process models": [
     {
+      "type": "fopdt",
       "fopdtlog": "/var/lib/autotune/log/fopdt_log.txt",
       "lambdafactor": [0.5, 1.0, 1.5, 2.0],
-      "priority": 1,
-      "type": "fopdt"
+      "priority": 1
     }
   ],
 
   "PID tuning methods": [
     {
+      "type": "imc",
       "imcpidlog": "/var/lib/autotune/log/imc_pid_log.txt",
-      "enable": true,
-      "type": "imc"
+      "enable": true
     }
   ]
 }

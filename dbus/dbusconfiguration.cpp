@@ -99,62 +99,55 @@ std::optional<autotune::Config> loadConfigFromEntityManager()
         if (ifmap.count(dbusconst::kCfgIfaceBasic))
         {
             const auto& m = ifmap.at(dbusconst::kCfgIfaceBasic);
-            cfg.basic.pollIntervalSec =
-                static_cast<int>(std::get<double>(m.at("pollInterval")));
-            cfg.basic.truncateDecimals =
-                static_cast<int>(std::get<double>(m.at("truncatedecimals")));
+            if (m.count("pollInterval"))
+                cfg.basic.pollIntervalSec =
+                    static_cast<int>(std::get<double>(m.at("pollInterval")));
+            if (m.count("truncatedecimals"))
+                cfg.basic.truncateDecimals = static_cast<int>(
+                    std::get<double>(m.at("truncatedecimals")));
             if (m.count("maxiterations"))
-            {
                 cfg.basic.maxIterations =
                     static_cast<int>(std::get<double>(m.at("maxiterations")));
-            }
             if (m.count("steadyslope"))
-            {
                 cfg.basic.steadySlopeThresholdPerSec =
                     std::get<double>(m.at("steadyslope"));
-            }
             if (m.count("steadyrmse"))
-            {
                 cfg.basic.steadyRmseThreshold =
                     std::get<double>(m.at("steadyrmse"));
-            }
             if (m.count("steadywindow"))
-            {
                 cfg.basic.steadyWindow =
                     static_cast<int>(std::get<double>(m.at("steadywindow")));
-            }
             if (m.count("steadysetpointband"))
-            {
                 cfg.basic.steadySetpointBand =
                     std::get<double>(m.at("steadysetpointband"));
-            }
         }
+
         if (ifmap.count(dbusconst::kCfgIfaceSensor))
         {
             const auto& m = ifmap.at(dbusconst::kCfgIfaceSensor);
             const std::string type = std::get<std::string>(m.at("type"));
+
             if (type == "temp")
             {
                 cfg.temp.name = std::get<std::string>(m.at("Name"));
-                cfg.temp.inputPath =
-                    std::get<std::string>(m.at("tempxinputpath"));
+                // New field "input" (D-Bus key). Fallback: derive from Name.
+                if (m.count("input"))
+                    cfg.temp.input = std::get<std::string>(m.at("input"));
+                else
+                    cfg.temp.input = cfg.temp.name;
+
                 cfg.temp.setpoint = std::get<double>(m.at("setpoint"));
                 cfg.temp.type = "temp";
 
                 if (m.count("sensortype"))
-                {
                     cfg.temp.sensorType =
                         std::get<std::string>(m.at("sensortype"));
-                }
+
                 // Explicit overrides
                 if (m.count("qstepc"))
-                {
                     cfg.temp.qStepC = std::get<double>(m.at("qstepc"));
-                }
                 if (m.count("accuracyc"))
-                {
                     cfg.temp.accuracyC = std::get<double>(m.at("accuracyc"));
-                }
 
                 if (!cfg.temp.sensorType.empty())
                 {
@@ -174,21 +167,21 @@ std::optional<autotune::Config> loadConfigFromEntityManager()
             {
                 autotune::FanChannel fan{};
                 fan.name = std::get<std::string>(m.at("Name"));
-                fan.pwmPath = std::get<std::string>(m.at("pwmxpath"));
-                fan.tachPath = std::get<std::string>(m.at("fanxinputpath"));
+                if (m.count("input"))
+                    fan.input = std::get<std::string>(m.at("input"));
+                else
+                    fan.input = fan.name;
+
                 if (m.count("minduty"))
-                {
                     fan.minDuty =
                         static_cast<int>(std::get<double>(m.at("minduty")));
-                }
                 if (m.count("maxduty"))
-                {
                     fan.maxDuty =
                         static_cast<int>(std::get<double>(m.at("maxduty")));
-                }
                 cfg.fans.push_back(fan);
             }
         }
+
         if (ifmap.count(dbusconst::kCfgIfaceExperiment))
         {
             const auto& m = ifmap.at(dbusconst::kCfgIfaceExperiment);
@@ -196,8 +189,8 @@ std::optional<autotune::Config> loadConfigFromEntityManager()
             if (etype == "baseduty")
             {
                 autotune::BaseDutyExperimentCfg e{};
-                e.logPath = std::get<std::string>(m.at("basedutylog"));
-                // tol removed; step sizes remain
+                if (m.count("basedutylog"))
+                    e.logPath = std::get<std::string>(m.at("basedutylog"));
                 if (m.count("stepoutsidetol"))
                     e.stepOutsideTol = static_cast<int>(
                         std::get<double>(m.at("stepoutsidetol")));
@@ -207,27 +200,33 @@ std::optional<autotune::Config> loadConfigFromEntityManager()
                 if (m.count("priority"))
                     e.priority =
                         static_cast<int>(std::get<double>(m.at("priority")));
-                e.enabled = std::get<bool>(m.at("enable"));
+                e.enabled =
+                    m.count("enable") ? std::get<bool>(m.at("enable")) : true;
                 cfg.baseDuty = e;
             }
             else if (etype == "steptrigger")
             {
                 autotune::StepTriggerExperimentCfg e{};
-                e.logPath = std::get<std::string>(m.at("stepdutylog"));
-                e.stepDuty =
-                    static_cast<int>(std::get<double>(m.at("stepduty")));
+                if (m.count("stepdutylog"))
+                    e.logPath = std::get<std::string>(m.at("stepdutylog"));
+                if (m.count("stepduty"))
+                    e.stepDuty =
+                        static_cast<int>(std::get<double>(m.at("stepduty")));
                 if (m.count("priority"))
                     e.priority =
                         static_cast<int>(std::get<double>(m.at("priority")));
-                e.enabled = std::get<bool>(m.at("enable"));
+                e.enabled =
+                    m.count("enable") ? std::get<bool>(m.at("enable")) : true;
                 cfg.stepTrigger = e;
             }
         }
+
         if (ifmap.count(dbusconst::kCfgIfaceProcModel))
         {
             const auto& m = ifmap.at(dbusconst::kCfgIfaceProcModel);
             autotune::ProcessModelCfg p{};
-            p.logPath = std::get<std::string>(m.at("fopdtlog"));
+            if (m.count("fopdtlog"))
+                p.logPath = std::get<std::string>(m.at("fopdtlog"));
             if (m.count("lambdafactor"))
             {
                 const auto& v =
@@ -235,26 +234,27 @@ std::optional<autotune::Config> loadConfigFromEntityManager()
                 p.lambdaFactors = v;
             }
             if (m.count("priority"))
-            {
                 p.priority =
                     static_cast<int>(std::get<double>(m.at("priority")));
-            }
             p.enabled = true;
             cfg.fopdt = p;
         }
+
         if (ifmap.count(dbusconst::kCfgIfaceTuning))
         {
             const auto& m = ifmap.at(dbusconst::kCfgIfaceTuning);
             autotune::TuningMethodCfg t{};
-            t.logPath = std::get<std::string>(m.at("imcpidlog"));
-            t.enabled = std::get<bool>(m.at("enable"));
+            if (m.count("imcpidlog"))
+                t.logPath = std::get<std::string>(m.at("imcpidlog"));
+            t.enabled =
+                m.count("enable") ? std::get<bool>(m.at("enable")) : true;
             t.type = "imc";
             cfg.imc = t;
         }
     }
 
     // Basic validation
-    if (cfg.fans.empty() || cfg.temp.inputPath.empty())
+    if (cfg.fans.empty() || cfg.temp.input.empty())
     {
         return std::nullopt;
     }
