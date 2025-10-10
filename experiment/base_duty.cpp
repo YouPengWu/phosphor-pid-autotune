@@ -6,11 +6,11 @@
 #include "../core/time_utils.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <limits>
-#include <optional>
 
 namespace autotune::exp
 {
@@ -27,23 +27,30 @@ BaseDutyResult runBaseDuty(const autotune::Config& cfg)
 
     const auto& e = *cfg.baseDuty;
     const int poll = std::max(1, cfg.basic.pollIntervalSec);
-    const int stableN = std::max(1, cfg.basic.stableCount);
 
-    // Use *only* "equal to setpoint" rule for steady-state detection.
-    steady::SteadyStateDetector ss(stableN);
+    // Steady-state detector: slope + RMSE with quantization floors.
+    steady::SteadyStateDetector ss(
+        std::max(2, cfg.basic.steadyWindow), static_cast<double>(poll),
+        cfg.basic.steadySlopeThresholdPerSec, cfg.basic.steadyRmseThreshold,
+        cfg.temp.qStepC /* °C/LSB */
+    );
 
-    // Start from the tightest min duty across fans (and clamp to [0,255]).
+    // Start from max(minDuty) across fans, clamped to [0,255].
     int duty = cfg.fans.front().minDuty;
     for (const auto& f : cfg.fans)
-    {
         duty = std::max(duty, f.minDuty);
-    }
     duty = std::clamp(duty, 0, 255);
 
     const double spTrunc = numeric::truncateDecimals(
         cfg.temp.setpoint, cfg.basic.truncateDecimals);
 
-    // Optional CSV log: iter,duty,tempTrunc
+    // Dynamic error band from sensor accuracy + quantization floor.
+    const double quantFloor = cfg.temp.qStepC / std::sqrt(12.0);
+    double errBand = std::max(cfg.temp.accuracyC, quantFloor);
+    if (cfg.basic.steadySetpointBand > 0.0)
+        errBand = std::max(errBand, cfg.basic.steadySetpointBand);
+
+    // Optional CSV log: iter,duty,temp_trunc
     std::ofstream log;
     if (!e.logPath.empty())
     {
@@ -53,9 +60,7 @@ BaseDutyResult runBaseDuty(const autotune::Config& cfg)
                 std::filesystem::path(e.logPath).parent_path());
             log.open(e.logPath, std::ios::out | std::ios::trunc);
             if (log.is_open())
-            {
                 log << "iter,duty,temp_trunc\n";
-            }
         }
         catch (const std::exception& ex)
         {
@@ -68,13 +73,10 @@ BaseDutyResult runBaseDuty(const autotune::Config& cfg)
         std::vector<std::string> pwmPaths;
         pwmPaths.reserve(cfg.fans.size());
         for (const auto& f : cfg.fans)
-        {
             pwmPaths.push_back(f.pwmPath);
-        }
         sysfs::writePwmAll(pwmPaths, raw);
     };
 
-    // Track the "closest to setpoint" duty in case we never reach steady.
     int bestDuty = duty;
     double bestErr = std::numeric_limits<double>::infinity();
 
@@ -82,17 +84,12 @@ BaseDutyResult runBaseDuty(const autotune::Config& cfg)
 
     while (iter < cfg.basic.maxIterations)
     {
-        // Apply the same duty to all fans.
         applyDuty(duty);
-
-        // Wait poll interval.
         timeutil::sleepSeconds(poll);
 
-        // Read and truncate temperature.
         double temp = sysfs::readTempC(cfg.temp.inputPath);
         temp = numeric::truncateDecimals(temp, cfg.basic.truncateDecimals);
 
-        // Update best-so-far (based on truncated error).
         const double absErr = std::abs(temp - spTrunc);
         if (absErr < bestErr)
         {
@@ -100,69 +97,51 @@ BaseDutyResult runBaseDuty(const autotune::Config& cfg)
             bestDuty = duty;
         }
 
-        // Feed detector (only setpoint rule is used to decide steady).
-        ss.push(temp, spTrunc);
+        ss.push(temp);
 
-        // Log CSV if opened.
         if (log.is_open())
-        {
             log << iter << "," << duty << "," << temp << "\n";
-        }
 
-        // Check steady-at-setpoint only.
-        if (ss.isSteadyAtSetpoint())
+        // Convergence requires BOTH:
+        // (A) steady by slope+RMSE, and (B) mean within setpoint ± errBand.
+        const bool steady = ss.isSteady();
+        const auto ws = ss.stats();
+        const bool meanNearSP = (ws.n >= cfg.basic.steadyWindow) &&
+                                (std::abs(ws.mean - spTrunc) <= errBand);
+
+        if (steady && meanNearSP)
         {
             out.converged = true;
             out.baseDutyRaw = duty;
             break;
         }
 
-        // Duty update policy (signed):
-        // - When outside tol: use stepOutsideTol
-        // - When inside tol but not equal: use stepInsideTol
-        // Direction:
-        //   temp > spTrunc  -> too hot  -> increase duty (fan faster)
-        //   temp < spTrunc  -> too cold -> decrease duty (fan slower)
-        if (absErr > e.tol)
+        // Duty update uses errBand instead of tol.
+        if (absErr > errBand)
         {
-            if (temp > spTrunc)
-            {
-                duty = std::min(duty + e.stepOutsideTol, 255);
-            }
-            else if (temp < spTrunc)
-            {
-                duty = std::max(duty - e.stepOutsideTol, 0);
-            }
+            duty = (temp > spTrunc) ? std::min(duty + e.stepOutsideTol, 255)
+                                    : std::max(duty - e.stepOutsideTol, 0);
         }
-        else if (temp != spTrunc)
+        else if (absErr > 0.0) // inside band but not equal
         {
-            if (temp > spTrunc)
-            {
-                duty = std::min(duty + e.stepInsideTol, 255);
-            }
-            else /* temp < spTrunc */
-            {
-                duty = std::max(duty - e.stepInsideTol, 0);
-            }
+            duty = (temp > spTrunc) ? std::min(duty + e.stepInsideTol, 255)
+                                    : std::max(duty - e.stepInsideTol, 0);
         }
-        // If temp == spTrunc: keep duty unchanged and keep accumulating steady
-        // counts.
 
-        iter++;
+        ++iter;
     }
 
     out.iterations = iter;
 
     if (!out.converged)
     {
-        std::cerr << "[autotune] BaseDuty did not reach steady-at-setpoint "
-                     "within maxIterations="
-                  << cfg.basic.maxIterations << ". Using closest duty="
-                  << bestDuty << " (|Δ|=" << bestErr << ").\n";
+        std::cerr
+            << "[autotune] BaseDuty did not reach steady+setpoint within maxIterations="
+            << cfg.basic.maxIterations << ". Using closest duty=" << bestDuty
+            << " (|Δ|=" << bestErr << ").\n";
         out.baseDutyRaw = bestDuty;
     }
 
-    // Leave the last chosen duty applied.
     applyDuty(out.baseDutyRaw);
     return out;
 }

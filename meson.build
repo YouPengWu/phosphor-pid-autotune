@@ -14,6 +14,7 @@ srcs = [
   'buildjson/buildjson.cpp',
   'core/numeric.cpp',
   'core/steady_state.cpp',
+  'core/sensorinfo.cpp',
   'core/sysfs_io.cpp',
   'core/time_utils.cpp',
   'core/units.cpp',

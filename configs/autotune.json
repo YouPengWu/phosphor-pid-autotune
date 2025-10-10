@@ -2,39 +2,43 @@
   "basic settings": [
     {
       "pollInterval": 1,
-      "stablecount": 20,
-      "truncatedecimals": 0,
-      "maxiterations": 20000
+      "truncatedecimals": 2,
+      "maxiterations": 20000,
+      "steadyslope": 0.025,
+      "steadyrmse": 0.1,
+      "steadywindow": 20,
+      "steadysetpointband": 0.0,
+      "sensorinfopath": "/etc/phosphor-pid-autotune/sensorinfo.json"
     }
   ],
-  "sensors": [
-    {
-      "Name": "CPU_TEMP",
-      "tempxinputpath": "/sys/class/hwmon/hwmon0/temp1_input",
-      "setpoint": 79,
-      "type": "temp"
-    },
+  "fansensors": [
     {
       "Name": "SYS_FAN1_ROTOR1",
       "pwmxpath": "/sys/class/hwmon/hwmon1/pwm1",
       "fanxinputpath": "/sys/class/hwmon/hwmon1/fan1_input",
       "minduty": 40,
-      "maxduty": 200,
-      "type": "fan"
+      "maxduty": 200
     },
     {
       "Name": "SYS_FAN2_ROTOR1",
       "pwmxpath": "/sys/class/hwmon/hwmon1/pwm2",
       "fanxinputpath": "/sys/class/hwmon/hwmon1/fan2_input",
       "minduty": 40,
-      "maxduty": 200,
-      "type": "fan"
+      "maxduty": 200
+    }
+  ],
+  "tempsensors": [
+    {
+      "Name": "CPU_TEMP",
+      "tempxinputpath": "/sys/class/hwmon/hwmon0/temp1_input",
+      "setpoint": 79,
+      "type": "temp",
+      "sensortype": "tmp75"
     }
   ],
   "experiment": [
     {
       "basedutylog": "/var/lib/autotune/log/base_duty_log.txt",
-      "tol": 5,
       "stepoutsidetol": 2,
       "stepinsidetol": 1,
       "priority": 2,

@@ -1,20 +1,35 @@
 {
   "Exposes": [
     {
+      // Global/basic settings
       "Type": "xyz.openbmc_project.Configuration.PIDAutotuneBasic",
       "pollInterval": 1,
-      "stablecount": 20,
-      "truncatedecimals": 0,
-      "maxiterations": 20000
+      "truncatedecimals": 2,
+      "maxiterations": 20000,
+      "steadyslope": 0.025,   // °C/s
+      "steadyrmse": 0.10,     // °C
+      "steadywindow": 20,
+      "steadysetpointband": 0.0
     },
+
     {
+      // Temperature sensor (exactly one)
       "Type": "xyz.openbmc_project.Configuration.PIDAutotuneSensor",
       "Name": "CPU_TEMP",
       "tempxinputpath": "/sys/class/hwmon/hwmon0/temp1_input",
       "setpoint": 79,
-      "type": "temp"
+      "type": "temp",         // logical category for compatibility
+
+      // Preferred: specify sensortype and let the daemon resolve q & accuracy
+      "sensortype": "tmp75"
+
+      // Optional explicit overrides (highest priority):
+      // "qstepc": 0.0625,
+      // "accuracyc": 0.5
     },
+
     {
+      // Fan 1
       "Type": "xyz.openbmc_project.Configuration.PIDAutotuneSensor",
       "Name": "SYS_FAN1_ROTOR1",
       "pwmxpath": "/sys/class/hwmon/hwmon1/pwm1",
@@ -24,24 +39,29 @@
       "type": "fan"
     },
     {
+      // Fan 2
       "Type": "xyz.openbmc_project.Configuration.PIDAutotuneSensor",
       "Name": "SYS_FAN2_ROTOR1",
       "pwmxpath": "/sys/class/hwmon/hwmon1/pwm2",
       "fanxinputpath": "/sys/class/hwmon/hwmon1/fan2_input",
       "minduty": 40,
-      "maxduty": 200
+      "maxduty": 200,
+      "type": "fan"
     },
+
     {
+      // Base duty experiment (no 'tol'; band is derived from sensor accuracy)
       "Type": "xyz.openbmc_project.Configuration.PIDAutotuneExperiment",
       "basedutylog": "/var/lib/autotune/log/base_duty_log.txt",
-      "tol": 5,
       "stepoutsidetol": 2,
       "stepinsidetol": 1,
       "priority": 2,
       "enable": true,
       "type": "baseduty"
     },
+
     {
+      // Step trigger experiment
       "Type": "xyz.openbmc_project.Configuration.PIDAutotuneExperiment",
       "stepdutylog": "/var/lib/autotune/log/step_trigger_log.txt",
       "stepduty": 25,
@@ -49,14 +69,18 @@
       "enable": true,
       "type": "steptrigger"
     },
+
     {
+      // FOPDT process model identification
       "Type": "xyz.openbmc_project.Configuration.PIDAutotuneProcessModel",
       "fopdtlog": "/var/lib/autotune/log/fopdt_log.txt",
       "lambdafactor": [0.5, 1.0, 1.5, 2.0],
       "priority": 1,
       "type": "fopdt"
     },
+
     {
+      // IMC tuning method
       "Type": "xyz.openbmc_project.Configuration.PIDAutotuneTuningMethod",
       "imcpidlog": "/var/lib/autotune/log/imc_pid_log.txt",
       "enable": true,

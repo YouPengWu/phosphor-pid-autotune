@@ -1,69 +1,51 @@
 #pragma once
 
 #include <deque>
-#include <optional>
+#include <utility>
 
 namespace autotune::steady
 {
 
-// Tracks two steady-state definitions:
-// 1) Temperature equals setpoint (after truncation) for >= stableCount samples.
-// 2) Temperature equals previous value for >= stableCount samples.
+// Regression window statistics.
+struct WindowStats
+{
+    double slope{0.0};     // °C/s
+    double intercept{0.0}; // °C
+    double rmse{0.0};      // °C
+    double mean{0.0};      // mean(y) in window
+    int n{0};              // sample count
+};
+
+// Sliding-window steady state detector based on linear regression.
+// Steady if |slope| <= slopeThresh and RMSE <= rmseThresh.
+// Thresholds are clamped by quantization floors derived from sensor q (°C/LSB).
 class SteadyStateDetector
 {
   public:
-    explicit SteadyStateDetector(int stableCount) : required(stableCount) {}
+    SteadyStateDetector(int windowSize, double pollIntervalSec,
+                        double slopeThreshPerSec, double rmseThresh,
+                        double sensorQuantStepC /* °C/LSB */);
 
-    // Feed a new sample (already truncated).
-    void push(double value, double setpoint)
-    {
-        // Criterion 1: equals setpoint.
-        if (value == setpoint)
-        {
-            sameAsSetpointCount++;
-        }
-        else
-        {
-            sameAsSetpointCount = 0;
-        }
+    // Feed a new (already truncated) temperature value.
+    void push(double value);
 
-        // Criterion 2: equals last.
-        if (lastSample && *lastSample == value)
-        {
-            sameAsPrevCount++;
-        }
-        else
-        {
-            sameAsPrevCount = 1; // current counts as first
-        }
+    // True if the last window meets steady-state conditions.
+    bool isSteady() const;
 
-        lastSample = value;
-    }
+    // Compute and return current window regression statistics.
+    WindowStats stats() const;
 
-    // True if criterion (1) is satisfied.
-    bool isSteadyAtSetpoint() const
-    {
-        return sameAsSetpointCount >= required;
-    }
-
-    // True if criterion (2) is satisfied.
-    bool isSteadyAtPrevious() const
-    {
-        return sameAsPrevCount >= required;
-    }
-
-    void reset()
-    {
-        sameAsSetpointCount = 0;
-        sameAsPrevCount = 0;
-        lastSample.reset();
-    }
+    void reset();
 
   private:
-    int required{1};
-    int sameAsSetpointCount{0};
-    int sameAsPrevCount{0};
-    std::optional<double> lastSample;
+    int window{10};
+    double dt{1.0};
+    double userSlopeThresh{0.02};
+    double userRmseThresh{0.2};
+    double qC{0.0625}; // °C/LSB
+
+    long long count{0};
+    std::deque<std::pair<double, double>> samples; // (t, y)
 };
 
 } // namespace autotune::steady

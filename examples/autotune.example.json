@@ -1,54 +1,87 @@
 {
   "basic settings": [
     {
+      // Sampling period in seconds
       "pollInterval": 1,
-      "stablecount": 20,
-      "truncatedecimals": 0,
-      "maxiterations": 20000
+
+      // Truncate temperature decimals BEFORE processing (e.g., for noise shaping)
+      "truncatedecimals": 2,
+
+      // Hard cap to avoid infinite loops
+      "maxiterations": 20000,
+
+      // Regression-based steady-state thresholds (slope in °C/s, RMSE in °C)
+      "steadyslope": 0.025,
+      "steadyrmse": 0.10,
+
+      // Sliding window size for regression/RMSE (number of samples)
+      "steadywindow": 20,
+
+      // Optional extra band (°C) added on top of sensor accuracy; 0 disables it
+      "steadysetpointband": 0.0,
+
+      // External DB for sensor specs (q, accuracy, bits, tconv)
+      "sensorinfopath": "/etc/phosphor-pid-autotune/sensorinfo.json"
     }
   ],
-  "sensors": [
-    {
-      "Name": "CPU_TEMP",
-      "tempxinputpath": "/sys/class/hwmon/hwmon0/temp1_input",
-      "setpoint": 79,
-      "type": "temp"
-    },
+
+  // Fan channels (same duty applied during base duty search)
+  "fansensors": [
     {
       "Name": "SYS_FAN1_ROTOR1",
       "pwmxpath": "/sys/class/hwmon/hwmon1/pwm1",
       "fanxinputpath": "/sys/class/hwmon/hwmon1/fan1_input",
-      "minduty": 40,
-      "maxduty": 200,
-      "type": "fan"
+      "minduty": 40,   // start from max of all fans' minduty
+      "maxduty": 200   // safety clamp for PWM raw value
     },
     {
       "Name": "SYS_FAN2_ROTOR1",
       "pwmxpath": "/sys/class/hwmon/hwmon1/pwm2",
       "fanxinputpath": "/sys/class/hwmon/hwmon1/fan2_input",
       "minduty": 40,
-      "maxduty": 200,
-      "type": "fan"
+      "maxduty": 200
     }
   ],
+
+  // Exactly one temperature sensor
+  "tempsensors": [
+    {
+      "Name": "CPU_TEMP",
+      "tempxinputpath": "/sys/class/hwmon/hwmon0/temp1_input",
+      "setpoint": 79,
+      "type": "temp",        // logical category (kept for compatibility)
+      "sensortype": "tmp75", // physical type → lookup q & accuracy in sensorinfo
+
+      // Optional explicit overrides (if present, they override sensortype lookup):
+      // "qstepc": 0.0625,     // °C per LSB (quantization step)
+      // "accuracyc": 0.5      // typical absolute accuracy (°C)
+    }
+  ],
+
   "experiment": [
     {
+      // Base duty search: convergence requires
+      // (A) steady by slope+RMSE, and (B) mean within setpoint ± errBand,
+      // where errBand = max(accuracy, q/sqrt(12)).
       "basedutylog": "/var/lib/autotune/log/base_duty_log.txt",
-      "tol": 5,
-      "stepoutsidetol": 2,
-      "stepinsidetol": 1,
+      "stepoutsidetol": 2, // duty step when |error| > errBand
+      "stepinsidetol": 1,  // duty step when 0 < |error| ≤ errBand
       "priority": 2,
       "enable": true,
       "type": "baseduty"
     },
     {
+      // Step experiment:
+      // Pre-step: require (A) steady and (B) mean within setpoint ± errBand.
+      // Post-step: only require steady (mean can deviate from setpoint).
       "stepdutylog": "/var/lib/autotune/log/step_trigger_log.txt",
-      "stepduty": 25,
+      "stepduty": 25, // PWM raw step
       "priority": 1,
       "enable": true,
       "type": "steptrigger"
     }
   ],
+
   "process models": [
     {
       "fopdtlog": "/var/lib/autotune/log/fopdt_log.txt",
@@ -57,6 +90,7 @@
       "type": "fopdt"
     }
   ],
+
   "PID tuning methods": [
     {
       "imcpidlog": "/var/lib/autotune/log/imc_pid_log.txt",

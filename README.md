@@ -25,50 +25,63 @@ and **IMC PID** rules is in **[`docs/fopdt.md`](docs/fopdt.md)**.
 ```
 phosphor-pid-autotune
 ├── buildjson
-│   ├── buildjson.cpp                # Parse JSON config → in-memory Config with defaults/validation
-│   ├── buildjson.hpp                # Config structs + JSON loader interfaces
+│   ├── buildjson.cpp                # Parse JSON config → in-memory Config with defaults and validation
+│   ├── buildjson.hpp                # Config structs and JSON loader interfaces
 │   └── json.hpp                     # Local include wrapper for nlohmann::json
+│
 ├── configs
-│   └── autotune.json                # Fallback runtime config when EntityManager is absent
+│   ├── autotune.json                # Default runtime config (uses accuracyC/qStepC from sensorinfo)
+│   └── sensorinfo.json              # Central table: maps sensor type → q/accuracy/bits/tconv
+│
 ├── core
-│   ├── logging.cpp                  # Logging helpers implementation (stderr / phosphor-logging seam)
-│   ├── logging.hpp                  # Minimal logging macros/APIs
+│   ├── logging.cpp                  # Logging helpers implementation (stderr / phosphor-logging bridge)
+│   ├── logging.hpp                  # Minimal logging macros and APIs
 │   ├── numeric.cpp                  # Numeric utilities implementation
-│   ├── numeric.hpp                  # Truncate decimals, clamp, duty↔percent conversions
-│   ├── steady_state.cpp             # Steady-state detectors implementation
-│   ├── steady_state.hpp             # SP-equality & previous-equality rules
-│   ├── sysfs_io.cpp                 # Sysfs I/O for temp/tach read and PWM 0–255 write
-│   ├── sysfs_io.hpp                 # File operations + fan batch helpers
-│   ├── time_utils.cpp               # Monotonic clock/sleep helpers
-│   ├── time_utils.hpp               # nowMono(), sleepForSec(), simple timers
-│   ├── units.cpp                    # Units/scaling helpers implementation
-│   └── units.hpp                    # Percent/duty scaling, tolerance utils
+│   ├── numeric.hpp                  # Decimal truncation, clamping, duty↔percent conversions
+│   ├── steady_state.cpp             # Steady-state detection using slope and RMSE thresholds
+│   ├── steady_state.hpp             # Definitions and regression logic
+│   ├── sysfs_io.cpp                 # Sysfs I/O for temperature/tachometer read and PWM (0–255) write
+│   ├── sysfs_io.hpp                 # File operations and fan batch helpers
+│   ├── time_utils.cpp               # Monotonic clock and sleep helpers
+│   ├── time_utils.hpp               # nowMono(), sleepForSec(), and basic timers
+│   ├── units.cpp                    # Unit conversion and scaling helpers implementation
+│   └── units.hpp                    # Percent/duty scaling and tolerance utilities
+│
 ├── dbus
-│   ├── constants.hpp                # Well-known D-Bus names/paths (service, iface, mapper)
-│   ├── dbusconfiguration.cpp        # Read EntityManager Exposes → build Config (safe fallback)
-│   └── dbusconfiguration.hpp        # loadConfigFromEntityManager() declaration
+│   ├── constants.hpp                # Well-known D-Bus names and paths (service, interface, mapper)
+│   ├── dbusconfiguration.cpp        # Reads EntityManager Exposes → builds Config (supports q/accuracy)
+│   └── dbusconfiguration.hpp        # Declaration of loadConfigFromEntityManager()
+│
 ├── docs
-│   └── fopdt.md                     # Notes on FOPDT model and identification
+│   ├── fopdt.md                     # Mathematical derivation of the FOPDT model
+│   └── steady_state.md              # Steady-state detection derivation and implementation mapping
+│
 ├── examples
-│   ├── autotune.example.json        # Example for configs/autotune.json schema
-│   └── entitymanager.example.json   # Example EntityManager “Exposes” profile
+│   ├── autotune.example.json        # Example for configs/autotune.json (with inline comments)
+│   ├── entitymanager.example.json   # Example EntityManager Exposes (with inline comments)
+│   └── sensorinfo.example.json      # Example sensor info table (with inline comments)
+│
 ├── experiment
-│   ├── base_duty.cpp                # Find base duty (0–255) to hold temp at setpoint; logs search
-│   ├── base_duty.hpp                # Config + result types and API
-│   ├── step_trigger.cpp             # Stabilize → apply PWM step → record response; logs trace
-│   └── step_trigger.hpp             # Step experiment types and API
+│   ├── base_duty.cpp                # Base duty search (requires steady + near setpoint within errBand)
+│   ├── base_duty.hpp                # Config structures, results, and API
+│   ├── step_trigger.cpp             # Step test (pre: steady+near SP, post: steady only)
+│   └── step_trigger.hpp             # Step experiment data types and API
+│
 ├── PID_tuning_methods
-│   ├── imc.cpp                      # IMC tuning: λ-list → PID gain map; writes result file
-│   └── imc.hpp                      # IMC API and gain structs
+│   ├── imc.cpp                      # IMC tuning: λ-list → PID gain map; writes output log
+│   └── imc.hpp                      # IMC API definitions and PID gain structures
+│
 ├── process_models
-│   ├── fopdt.cpp                    # Identify K/T/L from step response; normalize duty 0–100%
-│   └── fopdt.hpp                    # FOPDT params and identification API
-├── .clang-format                    # Code style (clang-format) rules
-├── main.cpp                         # Orchestrator: D-Bus Enable switch, run pipeline, write logs
-├── meson.build                      # Meson build script (deps, sources, install paths)
+│   ├── fopdt.cpp                    # Identify K/T/L from step response; normalize duty (0–100%)
+│   └── fopdt.hpp                    # FOPDT parameter structure and identification API
+│
+├── .clang-format                    # Clang-format style configuration
+├── main.cpp                         # Main orchestrator: D-Bus Enable handler, autotune pipeline, log writer
+├── meson.build                      # Meson build script (dependencies, sources, install paths)
 ├── phosphor-pid-autotune.bb         # Yocto recipe: build/install binary, unit, fallback JSON
-├── phosphor-pid-autotune.service    # systemd unit; After=EntityManager; runs daemon with JSON path
-└── README.md                        # Quickstart, config schema, logs/paths, troubleshooting
+├── phosphor-pid-autotune.service    # systemd unit; After=EntityManager; runs autotune daemon
+└── README.md                        # Quickstart guide, config schema, logs/paths, and troubleshooting
+
 ```
 
 ---
