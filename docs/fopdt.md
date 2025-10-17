@@ -306,8 +306,9 @@ $$
 $$
 
 **Equation (25)**
+
 $$
-\boxed{T \approx 1.49\\bigl(t_{63.2} - t_{28.3}\bigr)}.
+\boxed{T \approx 1.49\bigl(t_{63.2}-t_{28.3}\bigr).}
 $$
 
 Then \(L\) can be obtained by substitution:
@@ -423,5 +424,6 @@ where:
 - \($\lambda$\): IMC filter parameter, 0.5~2
 
 ---
+
 
 
