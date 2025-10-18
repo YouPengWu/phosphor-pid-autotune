@@ -45,8 +45,9 @@ class SteadyStateDetector
     void push(double y)
     {
         buf.push_back(y);
-        if (static_cast<int>(buf.size()) > N)
-            buf.pop_back(); // sliding window
+        // FIX: sliding window must drop the OLDEST element, not the newest one.
+        while (static_cast<int>(buf.size()) > N)
+            buf.pop_front();
 
         if (static_cast<int>(buf.size()) >= 2)
             computeStats();
@@ -54,10 +55,11 @@ class SteadyStateDetector
             lastStats = WindowStats{};
     }
 
-    // True if |slope| <= beff and rmse <= reff.
+    // True if window is full (>=N), |slope| <= beff and rmse <= reff.
     bool isSteady() const
     {
         return lastStats.has_value() &&
+               lastStats->n >= N &&
                std::abs(lastStats->slope) <= lastStats->beff &&
                lastStats->rmse <= lastStats->reff;
     }
@@ -142,3 +144,4 @@ class SteadyStateDetector
 };
 
 } // namespace autotune::steady
+

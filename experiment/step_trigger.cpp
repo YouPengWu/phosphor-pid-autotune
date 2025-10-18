@@ -66,7 +66,8 @@ StepResponse runStepTrigger(const autotune::Config& cfg, int baseDutyRaw)
             log.open(e.logPath, std::ios::out | std::ios::trunc);
             if (log.is_open())
             {
-                log << "t_index,temp_trunc,pwm\n";
+                // FIX: header must match the 7 fields we log each line
+                log << "t_index,temp_trunc,pwm,slope,rmse,n,mean\n";
                 log.flush();
             }
         }
@@ -90,10 +91,13 @@ StepResponse runStepTrigger(const autotune::Config& cfg, int baseDutyRaw)
         out.samples.emplace_back(i, temp, pwm);
         ss.push(temp);
 
-        // Stream each sample to log immediately.
+        // Stream each sample with up-to-date regression stats.
         if (log.is_open())
         {
-            log << i << "," << temp << "," << pwm << "\n";
+            const auto st = ss.stats(); // slope, rmse, mean, n
+            log << i << "," << temp << "," << pwm << ","
+                << st.slope << "," << st.rmse << ","
+                << st.n << "," << st.mean << "\n";
             log.flush();
         }
 
@@ -118,8 +122,7 @@ StepResponse runStepTrigger(const autotune::Config& cfg, int baseDutyRaw)
         }
         else
         {
-            // Post-step stop condition: steady only (the mean can be away from
-            // SP).
+            // Post-step stop condition: steady only (the mean can be away from SP).
             if (ss.isSteady())
                 break;
         }
