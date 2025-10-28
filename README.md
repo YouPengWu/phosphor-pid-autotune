@@ -12,10 +12,12 @@ file when EM data is not present.
 
 ---
 
-A compact, GitHub-friendly derivation of **FOPDT**  
+A compact, GitHub-friendly derivation of **FOPDT**
+
 $$
-G(s)=\frac{K e^{-L s}}{T s + 1}.
+G(s)=\frac{K e^{-L s}}{T s + 1}
 $$
+
 and **IMC PID** rules is in **[`docs/fopdt.md`](docs/fopdt.md)**.  
 The steady-state detector math is in **[`docs/steady_state.md`](docs/steady_state.md)**.
 
