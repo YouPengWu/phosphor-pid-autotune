@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -25,7 +26,9 @@ StepResponse runStepTrigger(const autotune::Config& cfg, int baseDutyRaw)
     }
 
     const auto& e = *cfg.stepTrigger;
-    const int poll = std::max(1, cfg.basic.pollIntervalSec);
+    const int poll = (cfg.temp.pollIntervalSec > 0)
+                         ? cfg.temp.pollIntervalSec
+                         : std::max(1, cfg.basic.pollIntervalSec);
 
     // Gather DBus fan "inputs" so we can broadcast the PWM step to all of them.
     std::vector<std::string> inputs;
@@ -67,7 +70,7 @@ StepResponse runStepTrigger(const autotune::Config& cfg, int baseDutyRaw)
             if (log.is_open())
             {
                 // FIX: header must match the 7 fields we log each line
-                log << "t_index,temp_trunc,pwm,slope,rmse,n,mean\n";
+                log << "time_sec,temp_trunc,pwm,slope,rmse,n,mean\n";
                 log.flush();
             }
         }
@@ -80,6 +83,7 @@ StepResponse runStepTrigger(const autotune::Config& cfg, int baseDutyRaw)
 
     int i = 0;
     bool jumped = false;
+    auto tStart = std::chrono::steady_clock::now();
 
     while (i < cfg.basic.maxIterations)
     {
@@ -88,14 +92,17 @@ StepResponse runStepTrigger(const autotune::Config& cfg, int baseDutyRaw)
         double temp = dbusio::readTempCByInput(cfg.temp.input);
         temp = numeric::truncateDecimals(temp, cfg.basic.truncateDecimals);
 
-        out.samples.emplace_back(i, temp, pwm);
+        auto now = std::chrono::steady_clock::now();
+        double elapsed = std::chrono::duration<double>(now - tStart).count();
+
+        out.samples.emplace_back(elapsed, temp, pwm);
         ss.push(temp);
 
         // Stream each sample with up-to-date regression stats.
         if (log.is_open())
         {
             const auto st = ss.stats(); // slope, rmse, mean, n
-            log << i << "," << temp << "," << pwm << ","
+            log << elapsed << "," << temp << "," << pwm << ","
                 << st.slope << "," << st.rmse << ","
                 << st.n << "," << st.mean << "\n";
             log.flush();

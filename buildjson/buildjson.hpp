@@ -40,6 +40,7 @@ struct TempSensor
     double accuracyC{0.5}; // °C typical absolute accuracy
     int bits{};
     int tconvMs{};
+    int pollIntervalSec{}; // 0 means use global/default
 };
 
 struct FanChannel
@@ -57,31 +58,31 @@ struct BaseDutyExperimentCfg
     // floor.
     int stepOutsideTol{};
     int stepInsideTol{};
-    int priority{};
-    bool enabled{};
 };
 
 struct StepTriggerExperimentCfg
 {
     std::string logPath;
     int stepDuty{}; // 0-255
-    int priority{};
-    bool enabled{};
 };
 
 struct ProcessModelCfg
 {
     std::string logPath;
-    std::vector<double> lambdaFactors;
-    int priority{};
-    bool enabled{true};
+    std::vector<double> epsilonFactors;
 };
 
 struct TuningMethodCfg
 {
     std::string logPath;
-    bool enabled{};
     std::string type; // "imc"
+};
+
+struct NoiseExperimentCfg
+{
+    std::string logPath;
+    int sampleCount{100};
+    int pollInterval{1};
 };
 
 struct Config
@@ -92,6 +93,7 @@ struct Config
 
     std::optional<BaseDutyExperimentCfg> baseDuty;
     std::optional<StepTriggerExperimentCfg> stepTrigger;
+    std::optional<NoiseExperimentCfg> noiseProfile;
     std::optional<ProcessModelCfg> fopdt;
     std::optional<TuningMethodCfg> imc;
 };

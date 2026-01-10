@@ -1,7 +1,8 @@
 # Steady-State Detection
 
-This document derives the steady-state detection method used in **phosphor-pid-autotune**, based on a
-statistical linear regression model with slope and RMSE thresholds.  
+This document derives the steady-state detection method used in
+**phosphor-pid-autotune**, based on a statistical linear regression model with
+slope and RMSE thresholds.
 
 ---
 
@@ -25,7 +26,7 @@ $$
 
 where:
 
-- $a$: intercept — mean temperature level.  
+- $a$: intercept — mean temperature level.
 - $b$: slope — average temperature rate (°C/s).
 
 ---
@@ -117,7 +118,8 @@ These represent the **physical limits** of detectability.
 
 ## Steady-State Conditions
 
-Let user-defined thresholds be $b_{\text{user}}$ and $e_{\text{user}}$ for slope and RMSE respectively.  
+Let user-defined thresholds be $b_{\text{user}}$ and $e_{\text{user}}$ for slope
+and RMSE respectively.  
 The effective thresholds are limited by sensor quantization floors:
 
 **Equation (11)**
@@ -144,8 +146,8 @@ $$
 
 ## Setpoint Proximity Band
 
-In some phases (e.g. base duty search), the mean temperature must also
-be close to the target setpoint $y_{\mathrm{sp}}$.
+In some phases (e.g. base duty search), the mean temperature must also be close
+to the target setpoint $y_{\mathrm{sp}}$.
 
 **Equation (13)**
 
@@ -163,7 +165,7 @@ $$
 
 with:
 
-- $A_c$: sensor accuracy (°C).  
+- $A_c$: sensor accuracy (°C).
 - $q$: quantization step (°C/LSB).
 
 ---
@@ -174,63 +176,67 @@ with:
 
 The system is considered converged if:
 
-1. Steady-state holds (Equation 12), **and**  
+1. Steady-state holds (Equation 12), **and**
 2. Mean temperature is within the setpoint band (Equation 13).
 
 When iterating duty values:
 
-- If deviation $> \mathrm{errBand}$: take a larger step.  
+- If deviation $> \mathrm{errBand}$: take a larger step.
 - If deviation $\le \mathrm{errBand}$: take a smaller step.
 
 ---
 
 ### 2. StepTrigger Phase
 
-- **Pre-step condition:** must be both steady and near setpoint.  
-- **Post-step condition:** must be steady only (temperature expected to differ from setpoint).
+- **Pre-step condition:** must be both steady and near setpoint.
+- **Post-step condition:** must be steady only (temperature expected to differ
+  from setpoint).
 
 ---
 
 ## Parameter Summary
 
-| Parameter | Meaning | Unit / Typical |
-|------------|----------|----------------|
-| $N$ | regression window size | 20–30 samples |
-| $\Delta t$ | polling interval | 1 s |
-| $q$ | quantization step | 0.0625 °C (TMP75) |
-| $A_c$ | sensor accuracy | 0.5 °C |
-| $b_{\text{user}}$ | user slope threshold | 0.02–0.05 °C/s |
-| $e_{\text{user}}$ | user RMSE threshold | 0.05–0.1 °C |
-| $b_{\min}$ | quantization slope floor | $q / (\sqrt{12}\Delta t)$ |
-| $\sigma_q$ | quantization RMSE floor | $q / \sqrt{12}$ |
-| $\mathrm{errBand}$ | tolerance band | $\max(A_c, \sigma_q)$ |
+| Parameter          | Meaning                  | Unit / Typical            |
+| ------------------ | ------------------------ | ------------------------- |
+| $N$                | regression window size   | 20–30 samples             |
+| $\Delta t$         | polling interval         | 1 s                       |
+| $q$                | quantization step        | 0.0625 °C (TMP75)         |
+| $A_c$              | sensor accuracy          | 0.5 °C                    |
+| $b_{\text{user}}$  | user slope threshold     | 0.02–0.05 °C/s            |
+| $e_{\text{user}}$  | user RMSE threshold      | 0.05–0.1 °C               |
+| $b_{\min}$         | quantization slope floor | $q / (\sqrt{12}\Delta t)$ |
+| $\sigma_q$         | quantization RMSE floor  | $q / \sqrt{12}$           |
+| $\mathrm{errBand}$ | tolerance band           | $\max(A_c, \sigma_q)$     |
 
 ---
 
 ## Implementation Mapping
 
-| Code Field | Description | Equation |
-|-------------|--------------|-----------|
-| `basic.pollIntervalSec` | sampling interval $\Delta t$ | Eq. (1). |
-| `basic.steadyWindow` | window size $N$ | Eq. (2). |
-| `basic.steadyslope` | user slope threshold | Eq. (11). |
-| `basic.steadyrmse` | user RMSE threshold | Eq. (11). |
-| `temp.qStepC` | quantization step $q$ | Eq. (9). |
-| `temp.accuracyC` | sensor accuracy $A_c$ | Eq. (14). |
+| Code Field              | Description                  | Equation  |
+| ----------------------- | ---------------------------- | --------- |
+| `basic.pollIntervalSec` | sampling interval $\Delta t$ | Eq. (1).  |
+| `basic.steadyWindow`    | window size $N$              | Eq. (2).  |
+| `basic.steadyslope`     | user slope threshold         | Eq. (11). |
+| `basic.steadyrmse`      | user RMSE threshold          | Eq. (11). |
+| `temp.qStepC`           | quantization step $q$        | Eq. (9).  |
+| `temp.accuracyC`        | sensor accuracy $A_c$        | Eq. (14). |
 
 ---
 
 ## Intuitive Summary
 
-- **Slope criterion** detects whether temperature drift has ceased.  
-- **RMSE criterion** ensures fluctuations are within quantization and sensor limits.  
-- **Quantization floors** prevent false instability when signal noise is below measurable levels.  
-- **Setpoint proximity** adds an extra logical gate for phases requiring equilibrium at target.
+- **Slope criterion** detects whether temperature drift has ceased.
+- **RMSE criterion** ensures fluctuations are within quantization and sensor
+  limits.
+- **Quantization floors** prevent false instability when signal noise is below
+  measurable levels.
+- **Setpoint proximity** adds an extra logical gate for phases requiring
+  equilibrium at target.
 
 ---
 
 ## References
 
-- Linear least-squares regression (standard form).  
-- Quantization noise model: uniform error variance $q^2/12$.  
-- Temperature sensor datasheets (e.g., TMP75, LM75) for $q$ and $A_c$.  
+- Linear least-squares regression (standard form).
+- Quantization noise model: uniform error variance $q^2/12$.
+- Temperature sensor datasheets (e.g., TMP75, LM75) for $q$ and $A_c$.

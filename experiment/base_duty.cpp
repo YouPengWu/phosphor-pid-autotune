@@ -26,7 +26,9 @@ BaseDutyResult runBaseDuty(const autotune::Config& cfg)
     }
 
     const auto& e = *cfg.baseDuty;
-    const int poll = std::max(1, cfg.basic.pollIntervalSec);
+    const int poll = (cfg.temp.pollIntervalSec > 0)
+                         ? cfg.temp.pollIntervalSec
+                         : std::max(1, cfg.basic.pollIntervalSec);
 
     // Regression steady-state detector (slope + RMSE, quantization-aware).
     steady::SteadyStateDetector ss(

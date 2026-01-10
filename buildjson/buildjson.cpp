@@ -89,23 +89,18 @@ Config loadConfigFromJsonFile(const std::string& jsonPath)
         out.temp.name = ts.value("Name", "CPU_TEMP");
         out.temp.input = ts.value("input", "");
         out.temp.setpoint = ts.value("setpoint", 70.0);
-        out.temp.type = ts.value("type", "temp");
+        out.temp.type = "temp";
+
         out.temp.sensorType = ts.value("sensortype", std::string{});
+        out.temp.pollIntervalSec = ts.value("pollInterval", 0);
 
-        // Overrides
-        if (ts.contains("qstepc"))
-            out.temp.qStepC = ts.value("qstepc", out.temp.qStepC);
-        if (ts.contains("accuracyc"))
-            out.temp.accuracyC = ts.value("accuracyc", out.temp.accuracyC);
-
+        // Lookup sensor info from sensorType
         if (!out.temp.sensorType.empty())
         {
             if (auto ti = sensorinfo::lookupTempInfo(out.temp.sensorType))
             {
-                if (!ts.contains("qstepc"))
-                    out.temp.qStepC = ti->qStepC;
-                if (!ts.contains("accuracyc"))
-                    out.temp.accuracyC = ti->accuracyC;
+                out.temp.qStepC = ti->qStepC;
+                out.temp.accuracyC = ti->accuracyC;
                 out.temp.bits = ti->bits;
                 out.temp.tconvMs = ti->tconvMs;
             }
@@ -130,7 +125,9 @@ Config loadConfigFromJsonFile(const std::string& jsonPath)
                 out.temp.input = s.value("input", out.temp.name);
                 out.temp.setpoint = s.value("setpoint", 70.0);
                 out.temp.type = "temp";
+
                 out.temp.sensorType = s.value("sensortype", std::string{});
+                out.temp.pollIntervalSec = s.value("pollInterval", 0);
 
                 if (s.contains("qstepc"))
                     out.temp.qStepC = s.value("qstepc", out.temp.qStepC);
@@ -176,8 +173,6 @@ Config loadConfigFromJsonFile(const std::string& jsonPath)
                 cfg.logPath = e.value("basedutylog", "");
                 cfg.stepOutsideTol = e.value("stepoutsidetol", 10);
                 cfg.stepInsideTol = e.value("stepinsidetol", 1);
-                cfg.priority = e.value("priority", 1);
-                cfg.enabled = e.value("enable", true);
                 out.baseDuty = cfg;
             }
             else if (type == "steptrigger")
@@ -185,9 +180,15 @@ Config loadConfigFromJsonFile(const std::string& jsonPath)
                 StepTriggerExperimentCfg cfg{};
                 cfg.logPath = e.value("stepdutylog", "");
                 cfg.stepDuty = e.value("stepduty", 10);
-                cfg.priority = e.value("priority", 1);
-                cfg.enabled = e.value("enable", true);
                 out.stepTrigger = cfg;
+            }
+            else if (type == "noise")
+            {
+                NoiseExperimentCfg cfg{};
+                cfg.logPath = e.value("noiselog", "");
+                cfg.sampleCount = e.value("samplecount", 100);
+                cfg.pollInterval = e.value("pollinterval", 1);
+                out.noiseProfile = cfg;
             }
         }
     }
@@ -202,25 +203,23 @@ Config loadConfigFromJsonFile(const std::string& jsonPath)
             {
                 ProcessModelCfg cfg{};
                 cfg.logPath = p.value("fopdtlog", "");
-                if (p.contains("lambdafactor"))
+                if (p.contains("epsilonfactor"))
                 {
-                    if (p["lambdafactor"].is_array())
+                    if (p["epsilonfactor"].is_array())
                     {
-                        for (const auto& lf : p["lambdafactor"])
-                            cfg.lambdaFactors.push_back(lf.get<double>());
+                        for (const auto& ef : p["epsilonfactor"])
+                            cfg.epsilonFactors.push_back(ef.get<double>());
                     }
                     else
                     {
-                        cfg.lambdaFactors.push_back(
-                            p.value("lambdafactor", 1.0));
+                        cfg.epsilonFactors.push_back(
+                            p.value("epsilonfactor", 1.0));
                     }
                 }
                 else
                 {
-                    cfg.lambdaFactors = {1.0};
+                    cfg.epsilonFactors = {1.0};
                 }
-                cfg.priority = p.value("priority", 1);
-                cfg.enabled = true;
                 out.fopdt = cfg;
             }
         }
@@ -237,7 +236,6 @@ Config loadConfigFromJsonFile(const std::string& jsonPath)
             {
                 TuningMethodCfg cfg{};
                 cfg.logPath = t.value("imcpidlog", "");
-                cfg.enabled = t.value("enable", true);
                 cfg.type = "imc";
                 out.imc = cfg;
             }

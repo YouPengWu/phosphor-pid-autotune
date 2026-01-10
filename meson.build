@@ -1,5 +1,5 @@
 project('phosphor-pid-autotune', 'cpp',
-  default_options : ['cpp_std=c++20', 'warning_level=2'])
+  default_options : ['cpp_std=c++23', 'warning_level=2'])
 
 # Dependencies
 boost_dep = dependency('boost', required : true)
@@ -21,6 +21,7 @@ srcs = [
   'dbus/dbusconfiguration.cpp',
   'experiment/base_duty.cpp',
   'experiment/step_trigger.cpp',
+  'experiment/profile_noise.cpp',
   'process_models/fopdt.cpp',
   'PID_tuning_methods/imc.cpp',
 ]

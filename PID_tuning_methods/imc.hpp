@@ -7,6 +7,10 @@
 #include <string>
 #include <vector>
 
+#include <optional>
+#include <string>
+#include <vector>
+
 namespace autotune::tuning
 {
 
@@ -17,9 +21,17 @@ struct PidGains
     double Kd{};
 };
 
-// IMC PID tuning for multiple lambda factors; returns map lambda->gains.
-std::map<double, PidGains> imcFromFopdt(
+struct ImcResult
+{
+    double epsilon;
+    double ratio; // epsilon / theta
+    std::string type; // "PID", "PI", "Improved PI"
+    PidGains gains;
+};
+
+// IMC PID tuning for multiple epsilon factors; returns list of results.
+std::vector<ImcResult> imcFromFopdt(
     const autotune::proc::FopdtParams& p,
-    const std::vector<double>& lambdaFactors);
+    const std::vector<double>& epsilonFactors);
 
 } // namespace autotune::tuning

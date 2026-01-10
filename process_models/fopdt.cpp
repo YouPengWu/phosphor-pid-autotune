@@ -16,10 +16,27 @@ std::optional<FopdtParams> identifyFOPDT(const autotune::exp::StepResponse& sr,
         return std::nullopt;
     }
 
-    const int t0 = std::get<0>(sr.samples.front());
     const double y0 = std::get<1>(sr.samples.front());
     const int u0 = std::get<2>(sr.samples.front());
     const int u1 = std::get<2>(sr.samples.back());
+
+    // Find the timestamp where the step (input change) actually occurred.
+    // We scan for the first sample where input differs from u0.
+    // The "step" conceptually happened after the previous sample.
+    double t0 = std::get<0>(sr.samples.front());
+    size_t stepIdx = 0;
+    for (size_t i = 0; i < sr.samples.size(); ++i)
+    {
+        if (std::get<2>(sr.samples[i]) != u0)
+        {
+            if (i > 0)
+                t0 = std::get<0>(sr.samples[i - 1]);
+            else
+                t0 = std::get<0>(sr.samples[i]); // Should not happen if steady
+            stepIdx = i;
+            break;
+        }
+    }
 
     const double du = static_cast<double>(u1 - u0);
     if (std::abs(du) < 1e-6)
@@ -47,46 +64,58 @@ std::optional<FopdtParams> identifyFOPDT(const autotune::exp::StepResponse& sr,
         return std::nullopt;
     }
 
-    // Gain K: delta y / delta u (both in their native units).
-    // Input u is PWM raw 0..255; convert to "percent" for more intuitive K.
+    // Gain k: delta y / delta u (both in their native units).
+    // Input u is PWM raw 0..255; convert to "percent" for more intuitive k.
     const double duPct = (du / 255.0) * 100.0;
-    const double K = dy / duPct;
+    const double k = dy / duPct;
 
     // Normalize f(t) = (y - y0) / (yss - y0)
-    std::vector<std::pair<int, double>> f;
+    std::vector<std::pair<double, double>> f;
     f.reserve(sr.samples.size());
     for (const auto& s : sr.samples)
     {
-        int t = std::get<0>(s) - t0;
+        double t = std::get<0>(s) - t0;
         double y = std::get<1>(s);
         double val = (y - y0) / (yss - y0);
         f.emplace_back(t, val);
     }
 
-    auto find_time_for = [&](double p) -> int {
-        // Linear search for first f >= p
+    auto find_time_for = [&](double p) -> double {
+        // Search for range where f crosses p, then interpolate
         for (size_t i = 0; i < f.size(); ++i)
         {
             if (f[i].second >= p)
             {
-                return f[i].first;
+                if (i == 0)
+                    return static_cast<double>(f[i].first);
+
+                double t_prev = static_cast<double>(f[i - 1].first);
+                double y_prev = f[i - 1].second;
+                double t_curr = static_cast<double>(f[i].first);
+                double y_curr = f[i].second;
+
+                if (std::abs(y_curr - y_prev) < 1e-9)
+                    return t_curr;
+
+                double fraction = (p - y_prev) / (y_curr - y_prev);
+                return t_prev + fraction * (t_curr - t_prev);
             }
         }
-        return f.back().first;
+        return static_cast<double>(f.back().first);
     };
 
-    const int t283 = find_time_for(0.283);
-    const int t632 = find_time_for(0.632);
-    const double T = (static_cast<double>(1.494 * (t632 - t283)));
-    const double L = static_cast<double>(t283) - 0.333 * T;
+    const double t283 = find_time_for(0.283);
+    const double t632 = find_time_for(0.632);
+    const double tau = 1.494 * (t632 - t283);
+    const double theta = t283 - 0.333 * tau;
 
-    if (T <= 0.0)
+    if (tau <= 0.0)
     {
-        std::cerr << "[autotune] Invalid T.\n";
+        std::cerr << "[autotune] Invalid tau.\n";
         return std::nullopt;
     }
 
-    return FopdtParams{K, T, std::max(0.0, L)};
+    return FopdtParams{k, tau, std::max(0.0, theta)};
 }
 
 } // namespace autotune::proc

@@ -125,7 +125,21 @@ std::optional<autotune::Config> loadConfigFromEntityManager()
         if (ifmap.count(dbusconst::kCfgIfaceSensor))
         {
             const auto& m = ifmap.at(dbusconst::kCfgIfaceSensor);
-            const std::string type = std::get<std::string>(m.at("type"));
+
+
+            // Infer type if missing: "sensortype" -> temp, "minduty" -> fan
+            std::string type;
+            if (m.count("type"))
+            {
+                type = std::get<std::string>(m.at("type"));
+            }
+            else
+            {
+                if (m.count("sensortype") || m.count("setpoint"))
+                    type = "temp";
+                else if (m.count("minduty"))
+                    type = "fan";
+            }
 
             if (type == "temp")
             {
@@ -143,21 +157,18 @@ std::optional<autotune::Config> loadConfigFromEntityManager()
                     cfg.temp.sensorType =
                         std::get<std::string>(m.at("sensortype"));
 
-                // Explicit overrides
-                if (m.count("qstepc"))
-                    cfg.temp.qStepC = std::get<double>(m.at("qstepc"));
-                if (m.count("accuracyc"))
-                    cfg.temp.accuracyC = std::get<double>(m.at("accuracyc"));
+                if (m.count("pollInterval"))
+                    cfg.temp.pollIntervalSec =
+                        static_cast<int>(std::get<double>(m.at("pollInterval")));
 
+                // Lookup sensor info.
                 if (!cfg.temp.sensorType.empty())
                 {
                     if (auto ti =
                             sensorinfo::lookupTempInfo(cfg.temp.sensorType))
                     {
-                        if (!m.count("qstepc"))
-                            cfg.temp.qStepC = ti->qStepC;
-                        if (!m.count("accuracyc"))
-                            cfg.temp.accuracyC = ti->accuracyC;
+                        cfg.temp.qStepC = ti->qStepC;
+                        cfg.temp.accuracyC = ti->accuracyC;
                         cfg.temp.bits = ti->bits;
                         cfg.temp.tconvMs = ti->tconvMs;
                     }
@@ -197,11 +208,6 @@ std::optional<autotune::Config> loadConfigFromEntityManager()
                 if (m.count("stepinsidetol"))
                     e.stepInsideTol = static_cast<int>(
                         std::get<double>(m.at("stepinsidetol")));
-                if (m.count("priority"))
-                    e.priority =
-                        static_cast<int>(std::get<double>(m.at("priority")));
-                e.enabled =
-                    m.count("enable") ? std::get<bool>(m.at("enable")) : true;
                 cfg.baseDuty = e;
             }
             else if (etype == "steptrigger")
@@ -212,12 +218,30 @@ std::optional<autotune::Config> loadConfigFromEntityManager()
                 if (m.count("stepduty"))
                     e.stepDuty =
                         static_cast<int>(std::get<double>(m.at("stepduty")));
-                if (m.count("priority"))
-                    e.priority =
-                        static_cast<int>(std::get<double>(m.at("priority")));
-                e.enabled =
-                    m.count("enable") ? std::get<bool>(m.at("enable")) : true;
                 cfg.stepTrigger = e;
+            }
+            else if (etype == "noise")
+            {
+                autotune::NoiseExperimentCfg e{};
+                if (m.count("noiselog"))
+                    e.logPath = std::get<std::string>(m.at("noiselog"));
+                if (m.count("samplecount"))
+                {
+                    const auto& var = m.at("samplecount");
+                    if (std::holds_alternative<double>(var))
+                        e.sampleCount = static_cast<int>(std::get<double>(var));
+                    else if (std::holds_alternative<int64_t>(var))
+                        e.sampleCount = static_cast<int>(std::get<int64_t>(var));
+                }
+                if (m.count("pollinterval"))
+                {
+                    const auto& var = m.at("pollinterval");
+                    if (std::holds_alternative<double>(var))
+                        e.pollInterval = static_cast<int>(std::get<double>(var));
+                    else if (std::holds_alternative<int64_t>(var))
+                        e.pollInterval = static_cast<int>(std::get<int64_t>(var));
+                }
+                cfg.noiseProfile = e;
             }
         }
 
@@ -227,16 +251,12 @@ std::optional<autotune::Config> loadConfigFromEntityManager()
             autotune::ProcessModelCfg p{};
             if (m.count("fopdtlog"))
                 p.logPath = std::get<std::string>(m.at("fopdtlog"));
-            if (m.count("lambdafactor"))
+            if (m.count("epsilonfactor"))
             {
                 const auto& v =
-                    std::get<std::vector<double>>(m.at("lambdafactor"));
-                p.lambdaFactors = v;
+                    std::get<std::vector<double>>(m.at("epsilonfactor"));
+                p.epsilonFactors = v;
             }
-            if (m.count("priority"))
-                p.priority =
-                    static_cast<int>(std::get<double>(m.at("priority")));
-            p.enabled = true;
             cfg.fopdt = p;
         }
 
@@ -246,8 +266,6 @@ std::optional<autotune::Config> loadConfigFromEntityManager()
             autotune::TuningMethodCfg t{};
             if (m.count("imcpidlog"))
                 t.logPath = std::get<std::string>(m.at("imcpidlog"));
-            t.enabled =
-                m.count("enable") ? std::get<bool>(m.at("enable")) : true;
             t.type = "imc";
             cfg.imc = t;
         }

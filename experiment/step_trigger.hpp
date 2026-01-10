@@ -10,8 +10,8 @@ namespace autotune::exp
 
 struct StepResponse
 {
-    // (time index, temperature, input_pwm_raw)
-    std::vector<std::tuple<int, double, int>> samples;
+    // (time index [sec], temperature, input_pwm_raw)
+    std::vector<std::tuple<double, double, int>> samples;
     int startDuty{}; // raw
     int endDuty{};   // raw
 };

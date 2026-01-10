@@ -9,9 +9,9 @@ namespace autotune::proc
 
 struct FopdtParams
 {
-    double K{};
-    double T{};
-    double L{};
+    double k{};
+    double tau{};
+    double theta{};
 };
 
 // Identify FOPDT from a recorded step response.

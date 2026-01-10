@@ -1,73 +1,68 @@
 {
-  "basic settings": [
-    {
-      "//": "Sampling every 1s; total iteration guard; regression window=20.",
-      "pollInterval": 1,
-      "truncatedecimals": 0,
-      "maxiterations": 20000,
-
-      "// slope/rmse floors; effective threshold is max(user, sensor-floor).":
-      0,
-      "steadyslope": 0.02,
-      "steadyrmse": 0.2,
-      "steadywindow": 20,
-
-      "// add extra ±band around setpoint (°C) if desired; 0 disables.":
-      0,
-      "steadysetpointband": 0.0
-    }
-  ],
-
-  "fansensors": [
-    { "Name": "SYS_FAN1_ROTOR1", "input": "PWM_FAN1", "minduty": 40, "maxduty": 200 },
-    { "Name": "SYS_FAN1_ROTOR2", "input": "PWM_FAN1", "minduty": 40, "maxduty": 200 }
-  ],
-
-  "tempsensors": [
-    {
-      "Name": "CPU0_TEMP",
-      "input": "CPU0_TEMP",
-      "setpoint": 79,
-      "type": "temp",
-      "sensortype": "tmp75",
-      "// optional overrides if different from DB defaults":
-      "qstepc": 0.0625,
-      "accuracyc": 0.5
-    }
-  ],
-
-  "experiment": [
-    {
-      "type": "baseduty",
-      "basedutylog": "/var/lib/autotune/log/base_duty_log.txt",
-      "stepoutsidetol": 2,
-      "stepinsidetol": 1,
-      "priority": 2,
-      "enable": true
-    },
-    {
-      "type": "steptrigger",
-      "stepdutylog": "/var/lib/autotune/log/step_trigger_log.txt",
-      "stepduty": 25,
-      "priority": 1,
-      "enable": true
-    }
-  ],
-
-  "process models": [
-    {
-      "type": "fopdt",
-      "fopdtlog": "/var/lib/autotune/log/fopdt_log.txt",
-      "lambdafactor": [0.5, 1.0, 1.5, 2.0],
-      "priority": 1
-    }
-  ],
-
-  "PID tuning methods": [
-    {
-      "type": "imc",
-      "imcpidlog": "/var/lib/autotune/log/imc_pid_log.txt",
-      "enable": true
-    }
-  ]
+    "basic settings": [
+        {
+            "pollInterval": 1,
+            "truncatedecimals": 0,
+            "maxiterations": 20000,
+            "steadyslope": 0.02,
+            "steadyrmse": 0.2,
+            "steadywindow": 20,
+            "steadysetpointband": 0.0
+        }
+    ],
+    "fansensors": [
+        {
+            "Name": "SYS_FAN1_ROTOR1",
+            "input": "PWM_FAN1",
+            "minduty": 40,
+            "maxduty": 200
+        },
+        {
+            "Name": "SYS_FAN1_ROTOR2",
+            "input": "PWM_FAN1",
+            "minduty": 40,
+            "maxduty": 200
+        }
+    ],
+    "tempsensors": [
+        {
+            "Name": "CPU0_TEMP",
+            "input": "CPU0_TEMP",
+            "setpoint": 79,
+            "sensortype": "tmp75",
+            "pollInterval": 1
+        }
+    ],
+    "experiment": [
+        {
+            "type": "baseduty",
+            "basedutylog": "/var/lib/autotune/log/base_duty_log.txt",
+            "stepoutsidetol": 2,
+            "stepinsidetol": 1
+        },
+        {
+            "type": "steptrigger",
+            "stepdutylog": "/var/lib/autotune/log/step_trigger_log.txt",
+            "stepduty": 25
+        },
+        {
+            "type": "noise",
+            "noiselog": "/var/lib/autotune/log/noise_profile_log.txt",
+            "samplecount": 200,
+            "pollinterval": 1
+        }
+    ],
+    "process models": [
+        {
+            "type": "fopdt",
+            "fopdtlog": "/var/lib/autotune/log/fopdt_log.txt",
+            "epsilonfactor": [0.5, 1.0, 1.5, 2.0]
+        }
+    ],
+    "PID tuning methods": [
+        {
+            "type": "imc",
+            "imcpidlog": "/var/lib/autotune/log/imc_pid_log.txt"
+        }
+    ]
 }
