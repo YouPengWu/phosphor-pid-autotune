@@ -1,0 +1,15 @@
+[Unit]
+Description=Phosphor PID Auto-Tuning Utility
+After=xyz.openbmc_project.fansensor.service
+
+[Service]
+Type=simple
+
+ExecStart=@BINDIR@/phosphor-pid-autotune @DATADIR@/phosphor-pid-autotune/configs/autotune.json
+Conflicts=phosphor-pid-control.service
+ExecStopPost=/bin/systemctl start phosphor-pid-control.service
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -4,8 +4,8 @@
 
 SUMMARY = "phosphor-pid-autotune"
 DESCRIPTION = "Run base-duty/step experiments, identify FOPDT, and compute IMC PID gains."
-LICENSE = "CLOSED"
-LIC_FILES_CHKSUM = ""
+LICENSE = "Apache-2.0"
+LIC_FILES_CHKSUM = "file://${COREBASE}/meta/files/common-licenses/Apache-2.0;md5=89aea4e17d99a7cacdbeed46a0096b10"
 
 # Source is shipped inside this layer (local files).
 FILESEXTRAPATHS:prepend := "${THISDIR}/:"
@@ -26,30 +26,8 @@ DEPENDS += "sdbusplus systemd nlohmann-json boost"
 # Minimal runtime deps
 RDEPENDS:${PN} += "systemd"
 
-do_install:append() {
-    # Install systemd unit (if not already installed by Meson)
-    install -d ${D}${systemd_unitdir}/system
-    if [ -f ${S}/phosphor-pid-autotune.service ]; then
-        install -m 0644 ${S}/phosphor-pid-autotune.service \
-            ${D}${systemd_unitdir}/system/
-    fi
-
-    # Install fallback JSON config (matches default path in main.cpp)
-    install -d ${D}${datadir}/phosphor-pid-autotune/configs
-    if [ -f ${S}/configs/autotune.json ]; then
-        install -m 0644 ${S}/configs/autotune.json \
-            ${D}${datadir}/phosphor-pid-autotune/configs/autotune.json
-    fi
-}
-
 # Systemd integration
 SYSTEMD_PACKAGES = "${PN}"
 SYSTEMD_SERVICE:${PN} = "phosphor-pid-autotune.service"
 SYSTEMD_AUTO_ENABLE:${PN} = "enable"
 
-# Package contents
-FILES:${PN} += " \
-    ${bindir}/phosphor-pid-autotune \
-    ${systemd_unitdir}/system/phosphor-pid-autotune.service \
-    ${datadir}/phosphor-pid-autotune/configs/autotune.json \
-"

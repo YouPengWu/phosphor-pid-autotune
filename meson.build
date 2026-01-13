@@ -1,38 +1,66 @@
-project('phosphor-pid-autotune', 'cpp',
-  default_options : ['cpp_std=c++23', 'warning_level=2'])
+project(
+    'phosphor-pid-autotune',
+    'cpp',
+    version: '0.1',
+    meson_version: '>=0.57.0',
+    default_options: [
+        'warning_level=3',
+        'werror=false',
+        # Updated to c++23 for std::move_only_function support in sdbusplus
+        'cpp_std=c++23', 
+        'buildtype=debugoptimized',
+    ],
+)
 
-# Dependencies
-boost_dep = dependency('boost', required : true)
-sdbusplus_dep = dependency('sdbusplus', method : 'pkg-config', required : true)
-phosphor_logging_dep = dependency('phosphor-logging', required : false)
-json_dep = dependency('nlohmann_json', method : 'pkg-config', required : true)
+sdbusplus = dependency('sdbusplus')
+nlohmann_json = dependency('nlohmann_json')
+systemd = dependency('systemd')
+boost = dependency('boost')
+
+deps = [
+    sdbusplus,
+    nlohmann_json,
+    systemd,
+    boost,
+]
 
 inc = include_directories('.')
 
 srcs = [
-  'main.cpp',
-  'buildjson/buildjson.cpp',
-  'core/numeric.cpp',
-  'core/steady_state.cpp',
-  'core/sensorinfo.cpp',
-  'core/dbus_io.cpp',
-  'core/time_utils.cpp',
-  'core/units.cpp',
-  'dbus/dbusconfiguration.cpp',
-  'experiment/base_duty.cpp',
-  'experiment/step_trigger.cpp',
-  'experiment/profile_noise.cpp',
-  'process_models/fopdt.cpp',
-  'PID_tuning_methods/imc.cpp',
+    'core/dbus_io.cpp',
+    'core/utils.cpp',
+    'buildjson/config.cpp',
+    'experiment/step_trigger.cpp',
+    'process_models/fopdt.cpp',
+    'PID_tuning_methods/imc.cpp',
+    'plot/plot_data.cpp',
+    'main.cpp',
 ]
 
-executable('phosphor-pid-autotune',
-  srcs,
-  include_directories : inc,
-  dependencies : [boost_dep, sdbusplus_dep, json_dep, phosphor_logging_dep],
-  install : true,
-  install_dir : get_option('bindir')
+executable(
+    'phosphor-pid-autotune',
+    srcs,
+    dependencies: deps,
+    include_directories: inc,
+    install: true,
 )
 
-install_data('configs/autotune.json',
-  install_dir : join_paths(get_option('datadir'), 'phosphor-pid-autotune', 'configs'))
+systemd_system_unit_dir = systemd.get_variable('systemdsystemunitdir')
+
+
+conf_data = configuration_data()
+conf_data.set('BINDIR', get_option('prefix') / get_option('bindir'))
+conf_data.set('DATADIR', get_option('prefix') / get_option('datadir'))
+
+configure_file(
+    input: 'phosphor-pid-autotune.service.in',
+    output: 'phosphor-pid-autotune.service',
+    configuration: conf_data,
+    install: true,
+    install_dir: systemd_system_unit_dir,
+)
+
+install_data(
+    'configs/autotune.json',
+    install_dir: get_option('datadir') / 'phosphor-pid-autotune' / 'configs',
+)

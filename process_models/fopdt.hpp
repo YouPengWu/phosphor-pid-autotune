@@ -1,22 +1,29 @@
 #pragma once
 
-#include "../experiment/step_trigger.hpp"
+#include <vector>
+#include <string>
 
-#include <optional>
-
-namespace autotune::proc
+namespace autotune::process_models
 {
 
-struct FopdtParams
+struct FOPDTParameters
 {
-    double k{};
-    double tau{};
-    double theta{};
+    double k = 0.0;
+    double tau = 0.0;
+    double theta = 0.0;
 };
 
-// Identify FOPDT from a recorded step response.
-// Returns std::nullopt if not enough information.
-std::optional<FopdtParams> identifyFOPDT(const autotune::exp::StepResponse& sr,
-                                         double setpoint, int truncateDecimals);
+/**
+ * @brief Identify FOPDT parameters from step response data.
+ * @param time Time vector
+ * @param temp Temperature vector
+ * @param initialPwm PWM before step
+ * @param stepPwm PWM after step
+ * @param stepTime Time when step occurred
+ */
+FOPDTParameters identifyFOPDT(const std::vector<double>& time, 
+                              const std::vector<double>& temp,
+                              double initialPwm, double stepPwm, 
+                              double stepTime);
 
-} // namespace autotune::proc
+} // namespace autotune::process_models

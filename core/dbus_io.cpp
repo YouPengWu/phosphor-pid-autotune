@@ -6,6 +6,7 @@
 #include <sdbusplus/exception.hpp>
 #include <sdbusplus/message.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <iostream>
 #include <map>
@@ -79,7 +80,8 @@ static std::optional<double> getDouble(
             return static_cast<double>(*pi);
         if (auto pu = std::get_if<uint64_t>(&v))
             return static_cast<double>(*pu);
-
+        
+        // Sometimes it might find bool or string, which we can't cast to double easily or don't want to
         std::cerr << "[autotune] Get " << path << " " << iface << "." << prop
                   << " not numeric\n";
         return std::nullopt;
@@ -149,5 +151,7 @@ std::optional<double> readFanPctByInput(const std::string& input)
     const std::string prop = "Value";
     return getDouble(path, iface, prop);
 }
+
+
 
 } // namespace autotune::dbusio

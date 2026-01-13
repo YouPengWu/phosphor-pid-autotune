@@ -1,37 +1,23 @@
 #pragma once
 
-#include "../buildjson/buildjson.hpp"
 #include "../process_models/fopdt.hpp"
-
-#include <map>
-#include <string>
-#include <vector>
-
-#include <optional>
 #include <string>
 #include <vector>
 
 namespace autotune::tuning
 {
 
-struct PidGains
-{
-    double Kp{};
-    double Ki{};
-    double Kd{};
-};
-
-struct ImcResult
+struct IMCEntry
 {
     double epsilon;
-    double ratio; // epsilon / theta
-    std::string type; // "PID", "PI", "Improved PI"
-    PidGains gains;
+    double ratio;
+    std::string type;
+    double kp;
+    double ki;
+    double kd;
 };
 
-// IMC PID tuning for multiple epsilon factors; returns list of results.
-std::vector<ImcResult> imcFromFopdt(
-    const autotune::proc::FopdtParams& p,
-    const std::vector<double>& epsilonFactors);
+std::vector<IMCEntry> calculateIMC(const process_models::FOPDTParameters& params,
+                                   const std::vector<double>& tauOverEpsilon);
 
 } // namespace autotune::tuning

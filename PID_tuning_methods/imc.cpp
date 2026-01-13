@@ -1,61 +1,60 @@
 #include "imc.hpp"
-
 #include <cmath>
-#include <map>
 
 namespace autotune::tuning
 {
 
-std::vector<ImcResult> imcFromFopdt(
-    const autotune::proc::FopdtParams& p,
-    const std::vector<double>& epsilonFactors)
+std::vector<IMCEntry> calculateIMC(const process_models::FOPDTParameters& modelParams,
+                                   const std::vector<double>& tauOverEpsilon)
 {
-    std::vector<ImcResult> out;
-    out.reserve(epsilonFactors.size() * 3);
+    std::vector<IMCEntry> results;
+    
+    if (std::abs(modelParams.k) < 1e-9) return results;
 
-    for (double eps : epsilonFactors)
+    std::vector<double> ratioList = tauOverEpsilon;
+    if (ratioList.empty())
     {
-        double ratio = 0.0;
-        if (std::abs(p.theta) > 1e-9)
-            ratio = eps / p.theta;
-        else
-            ratio = 1000.0; // Large ratio if no deadtime
-
-        // 1. PID (Rivera 1986 Table II Row 1)
-        {
-            double Kc = (2.0 * p.tau + p.theta) / (p.k * (2.0 * eps + p.theta));
-            double TauI = p.tau + 0.5 * p.theta;
-            double TauD = (p.tau * p.theta) / (2.0 * p.tau + p.theta);
-            
-            PidGains g{};
-            g.Kp = Kc;
-            g.Ki = (std::abs(TauI) > 1e-9) ? (Kc / TauI) : 0.0;
-            g.Kd = Kc * TauD;
-            
-            out.push_back({eps, ratio, "PID", g});
-        }
-
-
-
-        // 3. Improved PI (Rivera 1986 Table II Row 3)
-        {
-            double den = p.k * 2.0 * eps;
-            double Kc = 0.0;
-            if (std::abs(den) > 1e-9)
-                Kc = (2.0 * p.tau + p.theta) / den;
-            
-            double TauI = p.tau + 0.5 * p.theta;
-
-            PidGains g{};
-            g.Kp = Kc;
-            g.Ki = (std::abs(TauI) > 1e-9) ? (Kc / TauI) : 0.0;
-            g.Kd = 0.0;
-
-            out.push_back({eps, ratio, "Improved PI", g});
-        }
+        ratioList = {0.5, 1.0, 2.0};
     }
 
-    return out;
+    for (double currentRatio : ratioList)
+    {
+        double epsilon = (currentRatio > 1e-9) ? (modelParams.tau / currentRatio) : modelParams.tau;
+        
+        double epsilonThetaRatio = (modelParams.theta > 1e-6) ? (epsilon / modelParams.theta) : 999.0;
+
+        // 1. PID Controller
+        double numerator = 2.0 * modelParams.tau + modelParams.theta;
+        double denominator = modelParams.k * (2.0 * epsilon + modelParams.theta);
+        
+        double Kc = numerator / denominator;
+        double TauI = modelParams.tau + modelParams.theta / 2.0;
+        double TauD = (modelParams.tau * modelParams.theta) / (2.0 * modelParams.tau + modelParams.theta);
+        
+        IMCEntry pidEntry;
+        pidEntry.epsilon = epsilon;
+        pidEntry.ratio = epsilonThetaRatio;
+        pidEntry.type = "PID";
+        pidEntry.kp = Kc;
+        pidEntry.ki = (std::abs(TauI) > 1e-9) ? (Kc / TauI) : 0;
+        pidEntry.kd = Kc * TauD;
+        results.push_back(pidEntry);
+        
+        // 2. Improved PI Controller
+        Kc = (2.0 * modelParams.tau + modelParams.theta) / (2.0 * modelParams.k * epsilon);
+        TauI = modelParams.tau + modelParams.theta / 2.0;
+        
+        IMCEntry piEntry;
+        piEntry.epsilon = epsilon;
+        piEntry.ratio = epsilonThetaRatio;
+        piEntry.type = "Improved PI";
+        piEntry.kp = Kc;
+        piEntry.ki = (std::abs(TauI) > 1e-9) ? (Kc / TauI) : 0;
+        piEntry.kd = 0;
+        results.push_back(piEntry);
+    }
+
+    return results;
 }
 
 } // namespace autotune::tuning

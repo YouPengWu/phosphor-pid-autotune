@@ -1,87 +1,51 @@
 {
-    "basic settings": [
+    "basicsetting": [
         {
-            "pollInterval": 1,
-            "truncatedecimals": 0,
-            "maxiterations": 20000,
-            "steadyslope": 0.02,
-            "steadyrmse": 0.2,
-            "steadywindow": 20,
-            "steadysetpointband": 0.0,
-            "sensorinfopath": "/etc/phosphor-pid-autotune/sensorinfo.json"
-        }
-    ],
-    "fansensors": [
-        {
-            "Name": "PWM_FAN0",
-            "input": "PWM_FAN0",
-            "minduty": 179,
-            "maxduty": 255
-        },
-        {
-            "Name": "PWM_FAN1",
-            "input": "PWM_FAN1",
-            "minduty": 179,
-            "maxduty": 255
-        },
-        {
-            "Name": "PWM_FAN2",
-            "input": "PWM_FAN2",
-            "minduty": 179,
-            "maxduty": 255
-        },
-        {
-            "Name": "PWM_FAN3",
-            "input": "PWM_FAN3",
-            "minduty": 179,
-            "maxduty": 255
-        },
-        {
-            "Name": "PWM_FAN4",
-            "input": "PWM_FAN4",
-            "minduty": 179,
-            "maxduty": 255
-        }
-    ],
-    "tempsensors": [
-        {
-            "Name": "CPU0_TEMP",
-            "input": "CPU0_TEMP",
-            "setpoint": 80,
-            "pollInterval": 1,
-            "sensortype": "amd_sbtsi"
+            "pollinterval": 1,
+            "windowsize": 5,
+            "plot_sampling_rate": 5
         }
     ],
     "experiment": [
         {
-            "type": "baseduty",
-            "basedutylog": "/var/lib/autotune/log/base_duty_log.txt",
-            "stepoutsidetol": 2,
-            "stepinsidetol": 1
+            "initialfansensors": [
+                "FAN0_PWM_DUTY",
+                "FAN1_PWM_DUTY",
+                "FAN2_PWM_DUTY",
+                "FAN3_PWM_DUTY",
+                "FAN4_PWM_DUTY"
+            ],
+            "initialpwmduty": 179,
+            "aftertriggerfansensors": ["FAN3_PWM_DUTY", "FAN4_PWM_DUTY"],
+            "aftertriggerpwmduty": 204,
+            "initialiterations": 50,
+            "aftertriggeriterations": 50,
+            "tempsensor": "CPU0_TEMP"
         },
         {
-            "type": "steptrigger",
-            "stepdutylog": "/var/lib/autotune/log/step_trigger_log.txt",
-            "stepduty": 25
+            "initialfansensors": [
+                "FAN0_PWM_DUTY",
+                "FAN1_PWM_DUTY",
+                "FAN2_PWM_DUTY",
+                "FAN3_PWM_DUTY",
+                "FAN4_PWM_DUTY"
+            ],
+            "initialpwmduty": 168,
+            "aftertriggerfansensors": ["FAN0_PWM_DUTY", "FAN1_PWM_DUTY"],
+            "aftertriggerpwmduty": 193,
+            "initialiterations": 50,
+            "aftertriggeriterations": 50,
+            "tempsensor": "AMBIENT_TEMP"
+        }
+    ],
+    "process_models": [
+        {
+            "tau_over_epsilon": [1.7, 2.5, 10.0, 20],
+            "tempsensor": "CPU0_TEMP"
         },
         {
-            "type": "noise",
-            "noiselog": "/var/lib/autotune/log/noise_profile_log.txt",
-            "samplecount": 200,
-            "pollinterval": 1
-        }
-    ],
-    "process models": [
-        {
-            "type": "fopdt",
-            "fopdtlog": "/var/lib/autotune/log/fopdt_log.txt",
-            "epsilonfactor": [6.86, 8.58, 14.59, 15.28]
-        }
-    ],
-    "PID tuning methods": [
-        {
-            "type": "imc",
-            "imcpidlog": "/var/lib/autotune/log/imc_pid_log.txt"
+            "tau_over_epsilon": [1.7, 2.5, 10.0, 20],
+            "tempsensor": "AMBIENT_TEMP"
         }
     ]
 }

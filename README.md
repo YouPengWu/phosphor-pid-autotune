@@ -1,21 +1,9 @@
 # phosphor-pid-autotune
 
-An OpenBMC-side service that **runs fan experiments**, identifies a **FOPDT**
-process model from step data, and computes **PID coefficients** via **IMC**
-tuning. It prefers configuration from **EntityManager** and falls back to a
-local **JSON** file when EM data is not present.
-
-- DBus service (gate): `xyz.openbmc_project.PIDAutotune`.
-- DBus objects:
-  - `/xyz/openbmc_project/PIDAutotune/BaseDuty` (for base duty experiment).
-  - `/xyz/openbmc_project/PIDAutotune/StepTrigger` (for step test + FOPDT +
-    IMC).
-  - `/xyz/openbmc_project/PIDAutotune/NoiseProfile` (for steady-state noise
-    characterization).
-- DBus interface: `xyz.openbmc_project.Object.Enable`.
-- Property to trigger a run: **`Enabled`** (`false` → idle, `true` → run once).
-
----
+`phosphor-pid-autotune` is an OpenBMC tool designed to automate the tuning of
+PID control loops for fans. It performs step-response experiments to identify
+the thermal process model (First Order Plus Dead Time - FOPDT) and calculates
+optimal PID gains using the Internal Model Control (IMC) tuning method.
 
 A compact, GitHub-friendly derivation of **FOPDT**
 
@@ -23,262 +11,140 @@ $$
 G(s)=\frac{k e^{-\theta s}}{\tau s + 1}
 $$
 
-and **IMC PID** rules is in **[`docs/fopdt.md`](docs/fopdt.md)**.  
-The steady-state detector math is in
-**[`docs/steady_state.md`](docs/steady_state.md)**.
+and **IMC PID** rules is in **[`docs/fopdt.md`](docs/fopdt.md)**.
 
-## Repository layout
+## Features
+
+- **Automated Step Experiments**: Runs open-loop step response tests on standard
+  DBus fan/sensor objects.
+- **Process Identification**: Identifies Plant Gain (K), Time Constant (Tau),
+  and Dead Time (Theta) using the Two-Point Method.
+- **IMC Tuning**: Calculates Kp, Ki, Kd based on a user-configurable
+  `Tau / Epsilon` robustness ratio.
+- **Service Management**: Automatically stops the conflicting
+  `phosphor-pid-control` service during tuning and restarts it afterwards.
+- **Data Logging**: Generates detailed CSV logs and step-response plots for
+  post-analysis.
+
+## Repository Layout
 
 ```
 phosphor-pid-autotune
 ├── buildjson
-│   ├── buildjson.cpp                # Parse JSON config → in-memory Config with defaults and validation
-│   ├── buildjson.hpp                # Config structs and JSON loader interfaces
-│   └── json.hpp                     # Local include wrapper for nlohmann::json
-│
+│   ├── config.cpp                   # JSON config loader
+│   └── config.hpp                   # Config structs
 ├── configs
-│   ├── autotune.json                # Default runtime config (uses accuracyC/qStepC from sensorinfo)
-│   └── sensorinfo.json              # Central table: maps sensor type → q/accuracy/bits/tconv
-│
+│   └── autotune.json                # Runtime configuration
 ├── core
-│   ├── logging.cpp                  # Logging helpers implementation (stderr / phosphor-logging bridge)
-│   ├── logging.hpp                  # Minimal logging macros and APIs
-│   ├── numeric.cpp                  # Numeric utilities implementation
-│   ├── numeric.hpp                  # Decimal truncation, clamping, duty↔percent conversions
-│   ├── steady_state.cpp             # Steady-state detection using slope and RMSE thresholds
-│   ├── steady_state.hpp             # Definitions and regression logic
-│   ├── dbus_io.cpp                  # DBus I/O: read temperatures/fans and write PWM targets
-│   ├── dbus_io.hpp                  # DBus paths, interfaces, and typed read/write helpers
-│   ├── sensorinfo.cpp               # Load/cache sensor info DB; lookup by sensorType
-│   ├── sensorinfo.hpp               # TempSensorInfo struct and lookup APIs
-│   ├── time_utils.cpp               # Monotonic clock and sleep helpers
-│   ├── time_utils.hpp               # nowMono(), sleepForSec(), and basic timers
-│   ├── units.cpp                    # Unit conversion and scaling helpers implementation
-│   └── units.hpp                    # Percent/duty scaling and tolerance utilities
-│
+│   ├── dbus_io.cpp                  # DBus I/O: read temps / write PWM
+│   ├── dbus_io.hpp                  # DBus I/O headers
+│   ├── utils.cpp                    # General utilities
+│   └── utils.hpp                    # Utility headers
 ├── dbus
-│   ├── constants.hpp                # Well-known D-Bus names and paths (service, interface, mapper)
-│   ├── dbusconfiguration.cpp        # Reads EntityManager Exposes → builds Config (supports q/accuracy)
-│   └── dbusconfiguration.hpp        # Declaration of loadConfigFromEntityManager()
-│
+│   └── constants.hpp                # DBus service/path constants
 ├── docs
-│   ├── fopdt.md                     # Mathematical derivation of the FOPDT model
-│   └── steady_state.md              # Steady-state detection derivation and implementation mapping
-│
-├── examples
-│   ├── autotune.example.json        # Example for configs/autotune.json (with inline comments)
-│   ├── entitymanager.example.json   # Example EntityManager Exposes (with inline comments)
-│   └── sensorinfo.example.json      # Example sensor info table (with inline comments)
-│
+│   └── fopdt.md                     # Documentation for FOPDT math
 ├── experiment
-│   ├── base_duty.cpp                # Base duty search (requires steady + near setpoint within errBand)
-│   ├── base_duty.hpp                # Config structures, results, and API
-│   ├── profile_noise.cpp            # Noise characterization (calculates slope/RMSE of a window)
-│   ├── profile_noise.hpp            # Noise experiment API
-│   ├── step_trigger.cpp             # Step test (pre: steady+near SP, post: steady only)
-│   └── step_trigger.hpp             # Step experiment data types and API
-│
+│   ├── step_trigger.cpp             # Step test logic (State Machine)
+│   └── step_trigger.hpp             # Experiment API
 ├── PID_tuning_methods
-│   ├── imc.cpp                      # IMC tuning: λ-list → PID gain map; writes output log
-│   └── imc.hpp                      # IMC API definitions and PID gain structures
-│
+│   ├── imc.cpp                      # IMC tuning calculation
+│   └── imc.hpp                      # IMC headers
 ├── process_models
-│   ├── fopdt.cpp                    # Identify k/tau/theta from step response; normalize duty (0–100%)
-│   └── fopdt.hpp                    # FOPDT parameter structure and identification API
-│
-├── .clang-format                    # Clang-format style configuration
-├── main.cpp                         # Main orchestrator: DBus Enable handler, autotune pipeline, log writer
-├── meson.build                      # Meson build script (dependencies, sources, install paths)
-├── phosphor-pid-autotune.bb         # Yocto recipe: build/install binary, unit, fallback JSON
-├── phosphor-pid-autotune.service    # systemd unit; After=EntityManager; runs autotune daemon
-└── README.md                        # Quickstart guide, config schema, logs/paths, and troubleshooting
+│   ├── fopdt.cpp                    # FOPDT identification
+│   └── fopdt.hpp                    # FOPDT headers
+├── plot
+│   ├── plot_data.cpp                # Plot logging logic
+│   └── plot_data.hpp                # Plot headers
+├── .clang-format                    # Code style config
+├── .clang-tidy                      # Static analysis config
+├── .gitignore                       # Git ignore rules
+├── LICENSE                          # Apache-2.0 License
+├── OWNERS                           # Component maintainers
+├── README.md                        # This file
+├── main.cpp                         # Main entry point & DBus service
+├── meson.build                      # Meson build script
+└── phosphor-pid-autotune.service.in # Systemd unit template
 ```
 
----
+## Configuration
 
-## Build (Meson)
+The configuration is loaded from
+`/usr/share/phosphor-pid-autotune/configs/autotune.json` (or via command line
+argument).
 
-> OpenBMC SDKs ship required deps: `sdbusplus`, `systemd` (libsystemd), `boost`
-> (Asio), `nlohmann-json`.
+### Structure (`autotune.json`)
+
+```json
+{
+  "basicsetting": {
+    "pollinterval": 100,
+    "windowsize": 300,
+    "plotsamplingrate": 1
+  },
+  "experiment": [
+    {
+      "tempsensor": "CPU0_TEMP",
+      "initialfansensors": ["FAN0_PWM"],
+      "initialpwmduty": 128,
+      "initialiterations": 300,
+      "aftertriggerfansensors": ["FAN0_PWM"],
+      "aftertriggerpwmduty": 192,
+      "aftertriggeriterations": 600
+    }
+  ],
+  "process_models": {
+    "CPU0_TEMP": {
+      "tau_over_epsilon": [1.0, 2.5, 5.0]
+    }
+  }
+}
+```
+
+## Usage
+
+### 1. Start the Service
 
 ```bash
-meson setup build
-meson compile -C build
-sudo meson install -C build
+systemctl start phosphor-pid-autotune.service
 ```
 
-### Yocto (OpenBMC image)
+Starting the service **does not** immediately run the experiment. It enters an
+idle state waiting for a D-Bus trigger. Note: When the experiment starts,
+`phosphor-pid-control.service` will be stopped to prevent interference.
 
-Place `phosphor-pid-autotune.bb` under your layer, e.g.  
-`meta-yourlayer/recipes-phosphor/fans/phosphor-pid-autotune.bb`, then:
+### 2. Trigger the Experiment
 
-```bash
-bitbake obmc-phosphor-image
-```
-
----
-
-## Configure
-
-### Preferred: EntityManager (Exposes).
-
-Provide objects of these types (keys mirror `autotune.json`):
-
-- `xyz.openbmc_project.Configuration.PIDAutotuneBasic`.
-- `xyz.openbmc_project.Configuration.PIDAutotuneSensor`.
-- `xyz.openbmc_project.Configuration.PIDAutotuneExperiment`.
-- `xyz.openbmc_project.Configuration.PIDAutotuneProcessModel`.
-- `xyz.openbmc_project.Configuration.PIDAutotuneTuningMethod`.
-
-See **`examples/entitymanager.example.json`**.
-
-### Fallback: Local JSON.
-
-If no Exposes are found, the service loads **`configs/autotune.json`**.  
-See **`examples/autotune.example.json`** for a complete template.
-
-**Key fields (subset):**
-
-- `basic settings`:
-  - `pollInterval` _(s)_, `truncatedecimals`, `maxiterations`.
-  - `steadyslope`, `steadyrmse`, `steadywindow`, `steadysetpointband`
-    (optional).
-  - `sensorinfopath` (optional override for `configs/sensorinfo.json`).
-- **New-style sensors**:
-  - `tempsensors`: one object with `Name`, `input`, `setpoint`, `type:"temp"`,
-    `sensortype` (e.g., `"tmp75"`). Optional overrides: `qstepc`, `accuracyc`.
-  - `fansensors`: N objects with `Name`, `input`, `minduty`, `maxduty`.
-- `experiment` (independent control of experiments via DBus):
-  - `baseduty`: `stepoutsidetol`, `stepinsidetol`, `basedutylog` _(note: `tol`
-    removed; error band comes from sensor accuracy/quantization)_.
-  - `steptrigger`: `stepduty`, `stepdutylog`.
-- `process models`:
-  - `fopdt`: `fopdtlog`, `epsilonfactor` (array, e.g. `[0.5,1.0,1.5,2.0]`).
-- `PID tuning methods`:
-  - `imc`: `imcpidlog`.
-
-### DBus I/O bindings
-
-- **Temperature read**: `/xyz/openbmc_project/sensors/temperature/<input>`,  
-  interface `xyz.openbmc_project.Sensor.Value`, property `Value` (double, °C).
-- **Fan speed read (optional)**:
-  `/xyz/openbmc_project/sensors/fan_tach/<input>`,  
-  interface `xyz.openbmc_project.Sensor.Value`, property `Value` (double, RPM).
-- **Fan PWM write**: `/xyz/openbmc_project/control/fanpwm/<input>`,  
-  interface `xyz.openbmc_project.Control.FanPwm`, property `Target` (uint64,
-  0–255).  
-  _(When reading PWM as percentage:
-  `/xyz/openbmc_project/sensors/fan_pwm/<input>`, `Value` in 0–100.)_
-
----
-
-## Runtime flow
-
-1. **Load configuration.**
-   - Try **EntityManager**; if nothing found → use **`configs/autotune.json`**.
-2. **Wait on DBus “Enable” gate.**
-   - Service: `xyz.openbmc_project.PIDAutotune`.
-   - **For Base Duty Experiment**:
-     - Object: `/xyz/openbmc_project/PIDAutotune/BaseDuty`.
-     - Interface: `xyz.openbmc_project.Object.Enable`.
-   - **For Step Test + Tuning**:
-     - Object: `/xyz/openbmc_project/PIDAutotune/StepTrigger`.
-     - Interface: `xyz.openbmc_project.Object.Enable`.
-   - Property: `Enabled` (`false` by default).
-3. **When `Enabled=true` (on specific object).**
-   - `systemctl stop phosphor-pid-control`.
-   - Run **requested experiment**:
-     - **`BaseDuty`**: search base PWM (0–255). Finds steady duty near setpoint.
-     - **`StepTrigger`**: runs step test, then automatically runs **FOPDT**
-       identification and **IMC** tuning.
-   - Persist logs/results.
-   - `systemctl start phosphor-pid-control` (automatically restored).
-   - `Enabled` property automatically resets (or user should reset it).
-
----
-
-## Steady-state rules (exact behavior)
-
-We use a **linear regression** model on the last $N$ samples (window), with
-**slope** and **RMSE** thresholds, automatically floored by sensor quantization
-and accuracy (see `docs/steady_state.md`).
-
-Let samples be $(t_i, y_i)$ and the fit $y_i \approx a + b t_i$. Residuals
-$\varepsilon_i = y_i - (a + b t_i)$.
-
-- **Slope gate:** $\lvert b \rvert \le b_{\mathrm{eff}}$, where
-  $b_{\mathrm{eff}} = \max\{b_{\text{user}},\, q/(\sqrt{12}\,\Delta t)\}$.
-- **RMSE gate:** $\mathrm{RMSE} \le e_{\mathrm{eff}}$, where
-  $e_{\mathrm{eff}} = \max\{e_{\text{user}},\, q/\sqrt{12}\}$.
-- **Setpoint band (when required):**
-  $\lvert \bar{y} - y_{\mathrm{sp}} \rvert \le \mathrm{errBand}$ with
-  $\mathrm{errBand} = \max\{A_c,\, q/\sqrt{12}\}$.
-
-Application:
-
-- **BaseDuty:** must satisfy **(slope gate) ∧ (RMSE gate) ∧ (setpoint band)**.
-- **StepTrigger:** **pre-step** uses all three; **post-step** uses only **(slope
-  gate) ∧ (RMSE gate)**.
-
-All thresholds can be tuned via `basic settings`: `steadyslope`, `steadyrmse`,
-`steadywindow`, and optionally `steadysetpointband`.  
-Sensor floors come from `sensortype` via `sensorinfo.json` (or per-sensor
-overrides `qstepc`, `accuracyc`).
-
----
-
-## How to trigger a run (DBus)
-
-**Run Base Duty Experiment:**
+Use `busctl` to enable the experiment for a specific sensor (e.g., `CPU0_TEMP`):
 
 ```bash
 busctl set-property xyz.openbmc_project.PIDAutotune \
-  /xyz/openbmc_project/PIDAutotune/BaseDuty \
-  xyz.openbmc_project.Object.Enable Enabled b true
+    /xyz/openbmc_project/PIDAutotune/CPU0_TEMP \
+    xyz.openbmc_project.PIDAutotune.steptrigger Enabled b true
 ```
 
-**Run Step Test & Tuning:**
+Or trigger **all configured experiments** simultaneously (use with caution):
 
 ```bash
 busctl set-property xyz.openbmc_project.PIDAutotune \
-  /xyz/openbmc_project/PIDAutotune/StepTrigger \
-  xyz.openbmc_project.Object.Enable Enabled b true
+    /xyz/openbmc_project/PIDAutotune/alltempsensor \
+    xyz.openbmc_project.PIDAutotune.steptrigger Enabled b true
 ```
 
-**Run Noise Characterization (Profile):**
+### 3. Retrieve Results
 
-```bash
-# Optional: Set params (SampleCount=200, PollInterval=1s)
-busctl set-property xyz.openbmc_project.PIDAutotune \
-  /xyz/openbmc_project/PIDAutotune/NoiseProfile \
-  xyz.openbmc_project.PIDAutotune.NoiseConfig SampleCount t 200
+Logs are generated in `/var/lib/phosphor-pid-autotune/log/<SensorName>/`:
 
-busctl set-property xyz.openbmc_project.PIDAutotune \
-  /xyz/openbmc_project/PIDAutotune/NoiseProfile \
-  xyz.openbmc_project.PIDAutotune.NoiseConfig PollInterval t 1
+- `step_trigger_<SensorName>.txt`: Raw time-series data (Temp, PWM).
+- `fopdt_<SensorName>.txt`: Identified model parameters (K, Tau, Theta).
+- `imc_<SensorName>.txt`: Calculated PID gains for different robustness factors.
+- `step_trigger_<SensorName>_plot.txt`: Data formatted for plotting.
 
-# Start
-busctl set-property xyz.openbmc_project.PIDAutotune \
-  /xyz/openbmc_project/PIDAutotune/NoiseProfile \
-  xyz.openbmc_project.Object.Enable Enabled b true
-```
+## Mathematical Details
 
-**Logs (typical).**
+See [`docs/fopdt.md`](docs/fopdt.md) for the derivation of the FOPDT model and
+IMC tuning rules.
 
-- `basedutylog`: `/var/lib/autotune/log/base_duty_log.txt`.
-- `stepdutylog`: `/var/lib/autotune/log/step_trigger_log.txt`.
-- `fopdtlog`: `/var/lib/autotune/log/fopdt_log.txt`.
-- `imcpidlog`: `/var/lib/autotune/log/imc_pid_log.txt`.
-- `noiselog`: `/var/lib/autotune/log/noise_profile_log.txt` (if configured).
+## License
 
-> Paths are configurable and will be created if missing.
-
----
-
-## Notes
-
-- Uses **DBus I/O** for all sensor reads and PWM writes; no hwmon file paths in
-  the runtime path.
-- Falls back gracefully to a local JSON when EntityManager is not configured.
-- The step experiment normalizes output to duty **percent** (0–100%) inside
-  process modeling.
+Apache-2.0
