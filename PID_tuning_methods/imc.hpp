@@ -18,6 +18,6 @@ struct IMCEntry
 };
 
 std::vector<IMCEntry> calculateIMC(const process_models::FOPDTParameters& params,
-                                   const std::vector<double>& tauOverEpsilon);
+                                   const std::vector<double>& epsilonOverTheta);
 
 } // namespace autotune::tuning

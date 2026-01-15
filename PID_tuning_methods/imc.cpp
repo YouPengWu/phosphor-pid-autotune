@@ -5,21 +5,25 @@ namespace autotune::tuning
 {
 
 std::vector<IMCEntry> calculateIMC(const process_models::FOPDTParameters& modelParams,
-                                   const std::vector<double>& tauOverEpsilon)
+                                   const std::vector<double>& epsilonOverTheta)
 {
     std::vector<IMCEntry> results;
     
     if (std::abs(modelParams.k) < 1e-9) return results;
 
-    std::vector<double> ratioList = tauOverEpsilon;
+    std::vector<double> ratioList = epsilonOverTheta;
     if (ratioList.empty())
     {
-        ratioList = {0.5, 1.0, 2.0};
+        ratioList = {0.5, 0.8, 1.0, 2.0};
     }
 
     for (double currentRatio : ratioList)
     {
-        double epsilon = (currentRatio > 1e-9) ? (modelParams.tau / currentRatio) : modelParams.tau;
+        // currentRatio is epsilon / theta => epsilon = theta * currentRatio
+        // If theta is very small (avoid zero), use a default or small epsilon?
+        // Actually if theta is zero, FOPDT is weird. But let's assume valid theta.
+        double theta = (modelParams.theta < 1e-6) ? 1e-6 : modelParams.theta;
+        double epsilon = theta * currentRatio;
         
         double epsilonThetaRatio = (modelParams.theta > 1e-6) ? (epsilon / modelParams.theta) : 999.0;
 

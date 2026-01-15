@@ -1,4 +1,5 @@
 #include "buildjson/config.hpp"
+#include <filesystem>
 #include "experiment/step_trigger.hpp"
 
 #include <boost/asio.hpp>
@@ -85,12 +86,14 @@ int main(int argc, char** argv)
     std::shared_ptr<sdbusplus::asio::dbus_interface> allTempsIface;
     bool allEnabled = false;
 
+    int currentExpIdx = -1; // -1 means no sequence running
+
     {
          std::string objPath = "/xyz/openbmc_project/PIDAutotune/alltempsensor";
          allTempsIface = server->add_interface(objPath, "xyz.openbmc_project.PIDAutotune.steptrigger");
          
          allTempsIface->register_property("Enabled", false,
-            [&experiments, &allEnabled](const bool& req, bool& curr) {
+            [&experiments, &allEnabled, &currentExpIdx](const bool& req, bool& curr) {
                 if (req == curr) return 1;
                 curr = req;
                 allEnabled = req;
@@ -98,8 +101,20 @@ int main(int argc, char** argv)
                 std::cerr << "[AllTempSensor] Enabled set to " << req << ". Experiment count: " << experiments.size() << "\n";
 
                 if (req) {
-                    for(auto& e : experiments) e->setEnabled(true);
+                    // Start Sequence
+                    currentExpIdx = 0;
+                    if (!experiments.empty()) {
+                         std::cerr << "[AllTempSensor] Starting sequence with experiment 0\n";
+                         experiments[0]->setEnabled(true);
+                    } else {
+                         std::cerr << "[AllTempSensor] No experiments to run.\n";
+                         allEnabled = false;
+                         curr = false;
+                         currentExpIdx = -1;
+                    }
                 } else {
+                     // Stop All
+                     currentExpIdx = -1;
                      for(auto& e : experiments) e->setEnabled(false);
                 }
                 return 1;
@@ -120,8 +135,29 @@ int main(int argc, char** argv)
             if (exp->getEnabled()) anyRunning = true;
         }
         
-        if (allEnabled && !anyRunning) {
-            std::cerr << "[AllTempSensor] All experiments finished. Resetting Enabled to false.\n";
+        // Sequential Logic Manager
+        if (allEnabled && currentExpIdx >= 0) {
+             // Check if current experiment is still running
+             if (currentExpIdx < (int)experiments.size()) {
+                 if (!experiments[currentExpIdx]->getEnabled()) {
+                     // Current finished, start next
+                     currentExpIdx++;
+                     if (currentExpIdx < (int)experiments.size()) {
+                         std::cerr << "[AllTempSensor] Starting next experiment: " << currentExpIdx << "\n";
+                         experiments[currentExpIdx]->setEnabled(true);
+                     } else {
+                         // End of sequence
+                         std::cerr << "[AllTempSensor] All experiments finished. Sequence complete.\n";
+                         allEnabled = false;
+                         allTempsIface->set_property("Enabled", false);
+                         currentExpIdx = -1;
+                     }
+                 }
+             }
+        }
+        else if (allEnabled && !anyRunning && currentExpIdx == -1) {
+            // Fallback for safety if somehow state gets weird, roughly original logic but stricter
+            std::cerr << "[AllTempSensor] No experiments running and logic reset. Resetting Enabled.\n";
             allEnabled = false;
             allTempsIface->set_property("Enabled", false);
         }

@@ -1,9 +1,9 @@
 # Introduction
 
 This document derives the First-Order Plus Dead Time (FOPDT) model from first
-principles, explains how to identify system parameters \(k\), \(\tau\), and
-\(\theta\) from step-response data, and presents IMC-based formulas for
-practical PID controller tuning.
+principles, explains how to identify system parameters $k$, $\tau$, and $\theta$
+from step-response data, and presents IMC-based formulas for practical PID
+controller tuning.
 
 ## FOPDT Model Derivation
 
@@ -42,7 +42,7 @@ $$
 \frac{dy(t)}{dt} = \frac{1}{\tau}\bigl(k u(t) - y(t)\bigr), \quad \tau > 0, \quad k \in \mathbb{R}.
 $$
 
-Multiplying both sides by \(\tau\):
+Multiplying both sides by $\tau$:
 
 **Equation (3)**
 
@@ -101,10 +101,10 @@ $$
 u_d(t) = u(t - \theta),
 $$
 
-where \(\theta\) represents the delay between the input change and the observed
+where $\theta$ represents the delay between the input change and the observed
 system response.
 
-To ensure the delay has no effect before \(t = \theta\), we use the Heaviside
+To ensure the delay has no effect before $\(t = \theta\)$, we use the Heaviside
 step function:
 
 **Equation (8)**
@@ -210,7 +210,7 @@ represents the time delay in the frequency domain.
 
 ## Removing Delay for Simplification
 
-When \(\theta = 0\), we obtain the base form:
+When $\theta$, we obtain the base form:
 
 **Equation (17)**
 
@@ -218,7 +218,7 @@ $$
 F(s) = \frac{1}{s(\tau s + 1)}.
 $$
 
-Applying **partial-fraction decomposition** and dividing by \(\tau\):
+Applying **partial-fraction decomposition** and dividing by $\tau$:
 
 **Equation (18)**
 
@@ -255,7 +255,7 @@ $f(\infty)=1$.
 
 ---
 
-## Determination of Parameters \(\theta\) and \(\tau\)
+## Determination of Parameters $\theta$ and $\tau$
 
 From **Equation (20)**, for any $p\in(0,1)$ with $p=f(t_p)$,
 
@@ -280,7 +280,7 @@ t_{63.2} = \theta - \tau\ln(0.368).
 \end{cases}
 $$
 
-Subtracting to eliminate \(\theta\):
+Subtracting to eliminate $\theta$:
 
 **Equation (23)**
 
@@ -310,7 +310,7 @@ $$
 \boxed{\tau \approx 1.49\bigl(t_{63.2}-t_{28.3}\bigr).}
 $$
 
-Then \(\theta\) can be obtained by substitution:
+Then $\theta$ can be obtained by substitution:
 
 **Equation (26)**
 

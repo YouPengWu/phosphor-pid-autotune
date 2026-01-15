@@ -2,50 +2,66 @@
     "basicsetting": [
         {
             "pollinterval": 1,
-            "windowsize": 5,
-            "plot_sampling_rate": 5
+            "windowsize": 60,
+            "plot_sampling_rate": 1
         }
     ],
     "experiment": [
         {
             "initialfansensors": [
-                "FAN0_PWM_DUTY",
-                "FAN1_PWM_DUTY",
-                "FAN2_PWM_DUTY",
-                "FAN3_PWM_DUTY",
-                "FAN4_PWM_DUTY"
+                "Virtual_PWM1",
+                "Virtual_PWM2",
+                "Virtual_PWM3",
+                "Virtual_PWM4",
+                "Virtual_PWM5"
             ],
             "initialpwmduty": 179,
-            "aftertriggerfansensors": ["FAN3_PWM_DUTY", "FAN4_PWM_DUTY"],
+            "aftertriggerfansensors": [
+                "Virtual_PWM3",
+                "Virtual_PWM4"
+            ],
             "aftertriggerpwmduty": 204,
-            "initialiterations": 50,
-            "aftertriggeriterations": 50,
-            "tempsensor": "CPU0_TEMP"
+            "initialiterations": 300,
+            "aftertriggeriterations": 300,
+            "tempsensor": "Virtual_Temp1"
         },
         {
             "initialfansensors": [
-                "FAN0_PWM_DUTY",
-                "FAN1_PWM_DUTY",
-                "FAN2_PWM_DUTY",
-                "FAN3_PWM_DUTY",
-                "FAN4_PWM_DUTY"
+                "Virtual_Temp1",
+                "Virtual_PWM1",
+                "Virtual_PWM2",
+                "Virtual_PWM3",
+                "Virtual_PWM4"
             ],
             "initialpwmduty": 168,
-            "aftertriggerfansensors": ["FAN0_PWM_DUTY", "FAN1_PWM_DUTY"],
-            "aftertriggerpwmduty": 193,
-            "initialiterations": 50,
-            "aftertriggeriterations": 50,
-            "tempsensor": "AMBIENT_TEMP"
+            "aftertriggerfansensors": [
+                "Virtual_PWM3",
+                "Virtual_PWM4"
+            ],
+            "aftertriggerpwmduty": 181,
+            "initialiterations": 300,
+            "aftertriggeriterations": 300,
+            "tempsensor": "Virtual_Temp2"
         }
     ],
     "process_models": [
         {
-            "tau_over_epsilon": [1.7, 2.5, 10.0, 20],
-            "tempsensor": "CPU0_TEMP"
+            "epsilon_over_theta": [
+                1.7,
+                2.5,
+                10.0,
+                20.0
+            ],
+            "tempsensor": "Virtual_Temp1"
         },
         {
-            "tau_over_epsilon": [1.7, 2.5, 10.0, 20],
-            "tempsensor": "AMBIENT_TEMP"
+            "epsilon_over_theta": [
+                1.7,
+                2.5,
+                10.0,
+                20.0
+            ],
+            "tempsensor": "Virtual_Temp2"
         }
     ]
 }

@@ -230,7 +230,7 @@ void StepTrigger::runIMCPIDAnalysis(const std::string& sensorName)
                                                 expCfg.initialPwmDuty, expCfg.afterTriggerPwmDuty, 
                                                 stepTime);
                                                 
-    auto results = tuning::calculateIMC(params, modelCfg.tauOverEpsilon);
+    auto results = tuning::calculateIMC(params, modelCfg.epsilonOverTheta);
 
     std::string filename = logDir + "/imc_" + sensorName + ".txt";
     std::ofstream iFile(filename);

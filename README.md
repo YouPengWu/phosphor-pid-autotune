@@ -56,6 +56,9 @@ phosphor-pid-autotune
 ├── plot
 │   ├── plot_data.cpp                # Plot logging logic
 │   └── plot_data.hpp                # Plot headers
+├── tool
+│   ├── plot_curve.py                # Plotting script
+│   └── virtual_temp_plot.png        # Example plot
 ├── .clang-format                    # Code style config
 ├── .clang-tidy                      # Static analysis config
 ├── .gitignore                       # Git ignore rules
@@ -77,27 +80,44 @@ argument).
 
 ```json
 {
-  "basicsetting": {
-    "pollinterval": 100,
-    "windowsize": 300,
-    "plotsamplingrate": 1
-  },
-  "experiment": [
-    {
-      "tempsensor": "CPU0_TEMP",
-      "initialfansensors": ["FAN0_PWM"],
-      "initialpwmduty": 128,
-      "initialiterations": 300,
-      "aftertriggerfansensors": ["FAN0_PWM"],
-      "aftertriggerpwmduty": 192,
-      "aftertriggeriterations": 600
-    }
-  ],
-  "process_models": {
-    "CPU0_TEMP": {
-      "tau_over_epsilon": [1.0, 2.5, 5.0]
-    }
-  }
+    "basicsetting": [
+        {
+            "pollinterval": 1,
+            "windowsize": 60,
+            "plot_sampling_rate": 1
+        }
+    ],
+    "experiment": [
+        {
+            "initialfansensors": [
+                "Virtual_PWM1",
+                "Virtual_PWM2",
+                "Virtual_PWM3",
+                "Virtual_PWM4",
+                "Virtual_PWM5"
+            ],
+            "initialpwmduty": 179,
+            "aftertriggerfansensors": [
+                "Virtual_PWM3",
+                "Virtual_PWM4"
+            ],
+            "aftertriggerpwmduty": 204,
+            "initialiterations": 300,
+            "aftertriggeriterations": 300,
+            "tempsensor": "Virtual_Temp1"
+        }
+    ],
+    "process_models": [
+        {
+            "epsilon_over_theta": [
+                1.7,
+                2.5,
+                10.0,
+                20.0
+            ],
+            "tempsensor": "Virtual_Temp1"
+        }
+    ]
 }
 ```
 
@@ -115,11 +135,11 @@ idle state waiting for a D-Bus trigger. Note: When the experiment starts,
 
 ### 2. Trigger the Experiment
 
-Use `busctl` to enable the experiment for a specific sensor (e.g., `CPU0_TEMP`):
+Use `busctl` to enable the experiment for a specific sensor (e.g., `Virtual_Temp1`):
 
 ```bash
 busctl set-property xyz.openbmc_project.PIDAutotune \
-    /xyz/openbmc_project/PIDAutotune/CPU0_TEMP \
+    /xyz/openbmc_project/PIDAutotune/Virtual_Temp1 \
     xyz.openbmc_project.PIDAutotune.steptrigger Enabled b true
 ```
 
@@ -139,6 +159,14 @@ Logs are generated in `/var/lib/phosphor-pid-autotune/log/<SensorName>/`:
 - `fopdt_<SensorName>.txt`: Identified model parameters (K, Tau, Theta).
 - `imc_<SensorName>.txt`: Calculated PID gains for different robustness factors.
 - `step_trigger_<SensorName>_plot.txt`: Data formatted for plotting.
+
+## Analysis Tools
+
+A Python script is provided in `tool/plot_curve.py` to visualize the experimental results. It parses the `plot_*.txt` output files and generates "Temperature vs Duty" plots.
+
+### Plot
+
+![tool/virtual_temp_plot.png](tool/virtual_temp_plot.png)
 
 ## Mathematical Details
 
