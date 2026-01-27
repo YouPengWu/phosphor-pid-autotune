@@ -80,44 +80,36 @@ argument).
 
 ```json
 {
-    "basicsetting": [
-        {
-            "pollinterval": 1,
-            "windowsize": 60,
-            "plot_sampling_rate": 1
-        }
-    ],
-    "experiment": [
-        {
-            "initialfansensors": [
-                "Virtual_PWM1",
-                "Virtual_PWM2",
-                "Virtual_PWM3",
-                "Virtual_PWM4",
-                "Virtual_PWM5"
-            ],
-            "initialpwmduty": 179,
-            "aftertriggerfansensors": [
-                "Virtual_PWM3",
-                "Virtual_PWM4"
-            ],
-            "aftertriggerpwmduty": 204,
-            "initialiterations": 300,
-            "aftertriggeriterations": 300,
-            "tempsensor": "Virtual_Temp1"
-        }
-    ],
-    "process_models": [
-        {
-            "epsilon_over_theta": [
-                1.7,
-                2.5,
-                10.0,
-                20.0
-            ],
-            "tempsensor": "Virtual_Temp1"
-        }
-    ]
+  "basicsetting": [
+    {
+      "pollinterval": 1,
+      "windowsize": 60,
+      "plot_sampling_rate": 1
+    }
+  ],
+  "experiment": [
+    {
+      "initialfansensors": [
+        "Virtual_PWM1",
+        "Virtual_PWM2",
+        "Virtual_PWM3",
+        "Virtual_PWM4",
+        "Virtual_PWM5"
+      ],
+      "initialpwmduty": 179,
+      "aftertriggerfansensors": ["Virtual_PWM3", "Virtual_PWM4"],
+      "aftertriggerpwmduty": 204,
+      "initialiterations": 300,
+      "aftertriggeriterations": 300,
+      "tempsensor": "Virtual_Temp1"
+    }
+  ],
+  "process_models": [
+    {
+      "epsilon_over_theta": [1.7, 2.5, 10.0, 20.0],
+      "tempsensor": "Virtual_Temp1"
+    }
+  ]
 }
 ```
 
@@ -135,7 +127,8 @@ idle state waiting for a D-Bus trigger. Note: When the experiment starts,
 
 ### 2. Trigger the Experiment
 
-Use `busctl` to enable the experiment for a specific sensor (e.g., `Virtual_Temp1`):
+Use `busctl` to enable the experiment for a specific sensor (e.g.,
+`Virtual_Temp1`):
 
 ```bash
 busctl set-property xyz.openbmc_project.PIDAutotune \
@@ -162,7 +155,9 @@ Logs are generated in `/var/lib/phosphor-pid-autotune/log/<SensorName>/`:
 
 ## Analysis Tools
 
-A Python script is provided in `tool/plot_curve.py` to visualize the experimental results. It parses the `plot_*.txt` output files and generates "Temperature vs Duty" plots.
+A Python script is provided in `tool/plot_curve.py` to visualize the
+experimental results. It parses the `plot_*.txt` output files and generates
+"Temperature vs Duty" plots.
 
 ### Plot
 

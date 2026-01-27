@@ -1,67 +1,121 @@
 {
     "basicsetting": [
         {
-            "pollinterval": 1,
-            "windowsize": 60,
-            "plot_sampling_rate": 1
+            "pollinterval": 0.5,
+            "windowsize": 120,
+            "plot_sampling_rate": 5
         }
     ],
     "experiment": [
         {
             "initialfansensors": [
-                "Virtual_PWM1",
-                "Virtual_PWM2",
-                "Virtual_PWM3",
-                "Virtual_PWM4",
-                "Virtual_PWM5"
+                "PWM_DUTY0",
+                "PWM_DUTY1",
+                "PWM_DUTY2",
+                "PWM_DUTY3",
+                "PWM_DUTY4",
+                "PWM_DUTY5",
+                "PWM_DUTY6",
+                "PWM_DUTY7"
             ],
             "initialpwmduty": 179,
             "aftertriggerfansensors": [
-                "Virtual_PWM3",
-                "Virtual_PWM4"
+                "PWM_DUTY4",
+                "PWM_DUTY5",
+                "PWM_DUTY6",
+                "PWM_DUTY7"
             ],
             "aftertriggerpwmduty": 204,
-            "initialiterations": 300,
-            "aftertriggeriterations": 300,
-            "tempsensor": "Virtual_Temp1"
+            "initialiterations": 600,
+            "aftertriggeriterations": 600,
+            "tempsensor": "CPU0_TEMP"
         },
         {
             "initialfansensors": [
-                "Virtual_Temp1",
-                "Virtual_PWM1",
-                "Virtual_PWM2",
-                "Virtual_PWM3",
-                "Virtual_PWM4"
+                "PWM_DUTY0",
+                "PWM_DUTY1",
+                "PWM_DUTY2",
+                "PWM_DUTY3",
+                "PWM_DUTY4",
+                "PWM_DUTY5",
+                "PWM_DUTY6",
+                "PWM_DUTY7"
+            ],
+            "initialpwmduty": 156,
+            "aftertriggerfansensors": [
+                "PWM_DUTY0",
+                "PWM_DUTY1",
+                "PWM_DUTY2",
+                "PWM_DUTY3"
+            ],
+            "aftertriggerpwmduty": 181,
+            "initialiterations": 600,
+            "aftertriggeriterations": 600,
+            "tempsensor": "CPU1_TEMP"
+        },
+        {
+            "initialfansensors": [
+                "PWM_DUTY0",
+                "PWM_DUTY1",
+                "PWM_DUTY2",
+                "PWM_DUTY3",
+                "PWM_DUTY4",
+                "PWM_DUTY5",
+                "PWM_DUTY6",
+                "PWM_DUTY7"
             ],
             "initialpwmduty": 168,
             "aftertriggerfansensors": [
-                "Virtual_PWM3",
-                "Virtual_PWM4"
+                "PWM_DUTY4",
+                "PWM_DUTY5",
+                "PWM_DUTY6",
+                "PWM_DUTY7"
             ],
-            "aftertriggerpwmduty": 181,
-            "initialiterations": 300,
-            "aftertriggeriterations": 300,
-            "tempsensor": "Virtual_Temp2"
+            "aftertriggerpwmduty": 193,
+            "initialiterations": 600,
+            "aftertriggeriterations": 600,
+            "tempsensor": "INLET_OCP_TEMP0"
+        },
+        {
+            "initialfansensors": [
+                "PWM_DUTY0",
+                "PWM_DUTY1",
+                "PWM_DUTY2",
+                "PWM_DUTY3",
+                "PWM_DUTY4",
+                "PWM_DUTY5",
+                "PWM_DUTY6",
+                "PWM_DUTY7"
+            ],
+            "initialpwmduty": 143,
+            "aftertriggerfansensors": [
+                "PWM_DUTY0",
+                "PWM_DUTY1",
+                "PWM_DUTY2",
+                "PWM_DUTY3"
+            ],
+            "aftertriggerpwmduty": 168,
+            "initialiterations": 600,
+            "aftertriggeriterations": 600,
+            "tempsensor": "INLET_OCP_TEMP1"
         }
     ],
     "process_models": [
         {
-            "epsilon_over_theta": [
-                1.7,
-                2.5,
-                10.0,
-                20.0
-            ],
-            "tempsensor": "Virtual_Temp1"
+            "epsilon_over_theta": [1.7, 2.5, 10.0, 20.0],
+            "tempsensor": "CPU0_TEMP"
         },
         {
-            "epsilon_over_theta": [
-                1.7,
-                2.5,
-                10.0,
-                20.0
-            ],
-            "tempsensor": "Virtual_Temp2"
+            "epsilon_over_theta": [1.7, 2.5, 10.0, 20.0],
+            "tempsensor": "CPU1_TEMP"
+        },
+        {
+            "epsilon_over_theta": [1.7, 2.5, 10.0, 20.0],
+            "tempsensor": "INLET_OCP_TEMP0"
+        },
+        {
+            "epsilon_over_theta": [1.7, 2.5, 10.0, 20.0],
+            "tempsensor": "INLET_OCP_TEMP1"
         }
     ]
 }

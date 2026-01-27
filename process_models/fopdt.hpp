@@ -1,7 +1,8 @@
 #pragma once
 
-#include <vector>
+#include <limits>
 #include <string>
+#include <vector>
 
 namespace autotune::process_models
 {
@@ -21,9 +22,10 @@ struct FOPDTParameters
  * @param stepPwm PWM after step
  * @param stepTime Time when step occurred
  */
-FOPDTParameters identifyFOPDT(const std::vector<double>& time, 
-                              const std::vector<double>& temp,
-                              double initialPwm, double stepPwm, 
-                              double stepTime);
+FOPDTParameters identifyFOPDT(
+    const std::vector<double>& time, const std::vector<double>& temp,
+    double initialPwm, double stepPwm, double stepTime,
+    double overrideInitialTemp = std::numeric_limits<double>::infinity(),
+    double overrideFinalTemp = std::numeric_limits<double>::infinity());
 
 } // namespace autotune::process_models
