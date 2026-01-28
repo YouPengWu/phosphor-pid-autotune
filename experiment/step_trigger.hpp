@@ -3,12 +3,13 @@
 #include "../buildjson/config.hpp"
 #include "../plot/plot_data.hpp"
 
+#include <sdbusplus/bus.hpp>
+
+#include <chrono>
+#include <fstream>
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
-#include <fstream>
-#include <sdbusplus/bus.hpp>
-#include <chrono>
 
 namespace autotune::experiment
 {
@@ -35,27 +36,41 @@ struct DataPoint
 
 class StepTrigger
 {
-public:
-    StepTrigger(sdbusplus::bus_t& bus, const std::string& objectPath, // Match definition
+  public:
+    StepTrigger(sdbusplus::bus_t& bus,
+                const std::string& objectPath, // Match definition
                 const config::BasicSetting& basic,
                 const config::ExperimentConfig& exp,
                 const config::ModelConfig& model);
 
     void tick();
     void setEnabled(bool enabled);
-    bool getEnabled() const { return enabled; }
+    bool getEnabled() const
+    {
+        return enabled;
+    }
 
-private:
+  private:
     void start();
     void stop();
     void iteration();
     void finishExperiment();
     void runAnalysis();
-    
+
     // Sub-analysis functions
     void runNoiseAnalysis(const std::string& sensorName);
     void runFOPDTAnalysis(const std::string& sensorName);
     void runIMCPIDAnalysis(const std::string& sensorName);
+
+    struct AnalysisData
+    {
+        std::vector<double> times;
+        std::vector<double> temps;
+        double stepTime;
+        double startMean;
+        double endMean;
+    };
+    AnalysisData prepareAnalysisData();
 
     sdbusplus::bus_t& bus;
     std::string objectPath;
@@ -66,17 +81,17 @@ private:
     bool enabled = false;
     bool running = false;
     State state = State::Idle;
-    
+
     int64_t currentIteration = 0;
     std::chrono::time_point<std::chrono::steady_clock> startTime;
     std::chrono::time_point<std::chrono::steady_clock> lastTickTime;
-    
+
     std::vector<DataPoint> history;
     std::vector<DataPoint> fullLog;
-    
+
     std::string logDir;
     std::ofstream logFile;
-    
+
     plot::PlotLogger plotLogger; // Added PlotLogger
 };
 

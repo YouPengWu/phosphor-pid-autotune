@@ -140,7 +140,7 @@ void StepTrigger::iteration()
         rate = 1;
     if (dp.n % rate == 0)
     {
-        plotLogger.log(dp.n, dp.pwm, dp.temp);
+        plotLogger.log(dp.time, dp.pwm, dp.temp);
     }
 
     currentIteration++;
@@ -187,6 +187,32 @@ void StepTrigger::runAnalysis()
     runIMCPIDAnalysis(expCfg.tempSensor);
 }
 
+StepTrigger::AnalysisData StepTrigger::prepareAnalysisData()
+{
+    AnalysisData data;
+    for (const auto& dp : fullLog)
+    {
+        data.times.push_back(dp.time);
+        data.temps.push_back(dp.temp);
+    }
+
+    data.stepTime = 0;
+    if (expCfg.initialIterations < (int)fullLog.size())
+    {
+        data.stepTime = fullLog[expCfg.initialIterations].time;
+    }
+
+    size_t beforeIdx = (expCfg.initialIterations > 0 &&
+                        expCfg.initialIterations < (int)fullLog.size())
+                           ? (expCfg.initialIterations - 1)
+                           : 0;
+
+    data.startMean = fullLog[beforeIdx].mean;
+    data.endMean = fullLog.back().mean;
+
+    return data;
+}
+
 void StepTrigger::runNoiseAnalysis(const std::string& sensorName)
 {
     std::string filename = logDir + "/noise_" + sensorName + ".txt";
@@ -221,68 +247,41 @@ void StepTrigger::runNoiseAnalysis(const std::string& sensorName)
 
 void StepTrigger::runFOPDTAnalysis(const std::string& sensorName)
 {
-    std::vector<double> times, temps;
-    for (const auto& dp : fullLog)
-    {
-        times.push_back(dp.time);
-        temps.push_back(dp.temp);
-    }
+    auto data = prepareAnalysisData();
 
-    double stepTime = 0;
-    double startMean = 0;
-    double endMean = 0;
+    auto paramsLSM = process_models::identifyFOPDT(
+        data.times, data.temps, expCfg.initialPwmDuty,
+        expCfg.afterTriggerPwmDuty, data.stepTime, data.startMean,
+        data.endMean);
 
-    if (expCfg.initialIterations < (int)fullLog.size())
-    {
-        stepTime = fullLog[expCfg.initialIterations].time;
-    }
-
-    size_t beforeIdx = (expCfg.initialIterations > 0 &&
-                        expCfg.initialIterations < (int)fullLog.size())
-                           ? (expCfg.initialIterations - 1)
-                           : 0;
-    startMean = fullLog[beforeIdx].mean;
-    endMean = fullLog.back().mean;
-
-    auto params = process_models::identifyFOPDT(
-        times, temps, expCfg.initialPwmDuty, expCfg.afterTriggerPwmDuty,
-        stepTime, startMean, endMean);
+    auto params632 = process_models::identifyTwoPoint(
+        data.times, data.temps, expCfg.initialPwmDuty,
+        expCfg.afterTriggerPwmDuty, data.stepTime, data.startMean,
+        data.endMean);
 
     std::string filename = logDir + "/fopdt_" + sensorName + ".txt";
     std::ofstream fFile(filename);
-    fFile << "Name:" << sensorName << "\n";
-    fFile << "k=" << params.k << "\n";
-    fFile << "tau=" << params.tau << "\n";
-    fFile << "theta=" << params.theta << "\n";
+    fFile << "Name:" << sensorName << "\n\n";
+
+    fFile << "------632 Method--------\n";
+    fFile << "k=" << params632.k << "\n";
+    fFile << "tau=" << params632.tau << "\n";
+    fFile << "theta=" << params632.theta << "\n\n";
+
+    fFile << "------LSM Method--------\n";
+    fFile << "k=" << paramsLSM.k << "\n";
+    fFile << "tau=" << paramsLSM.tau << "\n";
+    fFile << "theta=" << paramsLSM.theta << "\n";
 }
 
 void StepTrigger::runIMCPIDAnalysis(const std::string& sensorName)
 {
-    std::vector<double> times, temps;
-    for (const auto& dp : fullLog)
-    {
-        times.push_back(dp.time);
-        temps.push_back(dp.temp);
-    }
-    double stepTime = 0;
-    double startMean = 0;
-    double endMean = 0;
-
-    if (expCfg.initialIterations < (int)fullLog.size())
-    {
-        stepTime = fullLog[expCfg.initialIterations].time;
-    }
-
-    size_t beforeIdx = (expCfg.initialIterations > 0 &&
-                        expCfg.initialIterations < (int)fullLog.size())
-                           ? (expCfg.initialIterations - 1)
-                           : 0;
-    startMean = fullLog[beforeIdx].mean;
-    endMean = fullLog.back().mean;
+    auto data = prepareAnalysisData();
 
     auto params = process_models::identifyFOPDT(
-        times, temps, expCfg.initialPwmDuty, expCfg.afterTriggerPwmDuty,
-        stepTime, startMean, endMean);
+        data.times, data.temps, expCfg.initialPwmDuty,
+        expCfg.afterTriggerPwmDuty, data.stepTime, data.startMean,
+        data.endMean);
 
     auto results = tuning::calculateIMC(params, modelCfg.epsilonOverTheta);
 

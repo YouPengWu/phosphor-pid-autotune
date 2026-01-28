@@ -1,6 +1,7 @@
 #include "plot_data.hpp"
-#include <iostream>
+
 #include <filesystem>
+#include <iostream>
 
 namespace autotune::plot
 {
@@ -12,13 +13,17 @@ PlotLogger::~PlotLogger()
     close();
 }
 
-void PlotLogger::start(const std::string& outputDir, const std::string& sensorName)
+void PlotLogger::start(const std::string& outputDir,
+                       const std::string& sensorName)
 {
     close(); // Close if already open
 
-    try {
+    try
+    {
         fs::create_directories(outputDir);
-    } catch (const fs::filesystem_error& e) {
+    }
+    catch (const fs::filesystem_error& e)
+    {
         std::cerr << "Error creating plot dir: " << e.what() << "\n";
     }
 
@@ -27,7 +32,7 @@ void PlotLogger::start(const std::string& outputDir, const std::string& sensorNa
 
     if (file.is_open())
     {
-        file << "n pwm temp\n";
+        file << "time pwm temp\n";
         file.flush();
         std::cout << "[Plot] Started log: " << filename << "\n";
     }
@@ -37,11 +42,11 @@ void PlotLogger::start(const std::string& outputDir, const std::string& sensorNa
     }
 }
 
-void PlotLogger::log(int64_t n, double pwm, double temp)
+void PlotLogger::log(double time, double pwm, double temp)
 {
     if (file.is_open())
     {
-        file << n << " " << pwm << " " << temp << "\n";
+        file << time << " " << pwm << " " << temp << "\n";
         file.flush();
     }
 }

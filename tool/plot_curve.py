@@ -1,128 +1,276 @@
+import argparse
 import matplotlib.pyplot as plt
+import sys
 import os
-import glob
-import re
+import math
 
 
-def process_file(filename):
-    print(f"Processing {filename}...")
-
-    # Extract sensor name from filename (e.g., plot_CPU0_TEMP.txt -> CPU0_TEMP)
-    # Assuming format is plot_{SENSOR_NAME}.txt
-    match = re.search(r"plot_(.+)\.txt", filename)
-    if match:
-        sensor_name = match.group(1)
-    else:
-        sensor_name = os.path.splitext(filename)[0]  # Fallback
-
-    output_filename = f"{sensor_name.lower()}_plot.png"
-
-    n_list = []
-    pwm_list = []
-    temp_list = []
+def parse_fopdt_file(fopdt_path):
+    params_632 = None
+    params_lsm = None
+    current_section = None
 
     try:
-        with open(filename, "r") as f:
-            lines = f.readlines()
-            # Skip header if it exists and looks like text
-            start_idx = 0
-            if lines and lines[0].strip().startswith("n"):
-                start_idx = 1
+        with open(fopdt_path, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
 
-            for line in lines[start_idx:]:
+                if "632 Method" in line:
+                    current_section = "632"
+                    params_632 = {}
+                elif "LSM Method" in line:
+                    current_section = "lsm"
+                    params_lsm = {}
+
+                if "=" in line:
+                    key, val = line.split("=")
+                    key = key.strip()
+                    val = val.strip()
+
+                    try:
+                        f_val = float(val)
+                        if current_section == "632" and params_632 is not None:
+                            params_632[key] = f_val
+                        elif (
+                            current_section == "lsm" and params_lsm is not None
+                        ):
+                            params_lsm[key] = f_val
+                    except ValueError:
+                        continue
+    except Exception as e:
+        print(f"Warning: Could not read FOPDT file: {e}")
+        return None, None
+
+    return params_632, params_lsm
+
+
+def get_model_curve(p, t_start, t_end, step_time, y0, delta_pwm, dt=0.1):
+    if not p:
+        return [], []
+    k = p["k"]
+    tau = p["tau"]
+    theta = p["theta"]
+
+    m_times = []
+    m_temps = []
+    t_curr = t_start
+
+    # Calculate delta_duty once
+    delta_duty = delta_pwm * 100.0 / 255.0
+
+    while t_curr <= t_end:
+        m_times.append(t_curr)
+        eff_t = t_curr - (step_time + theta)
+
+        if eff_t < 0:
+            val = y0
+        else:
+            val = y0 + k * delta_duty * (1 - math.exp(-eff_t / tau))
+
+        m_temps.append(val)
+        t_curr += dt
+
+    return m_times, m_temps
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Plot temperature curve from autotune data."
+    )
+    parser.add_argument(
+        "filename",
+        help="Path to the plot data file (e.g., plot_CPU0_TEMP.txt)",
+    )
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=0.5,
+        help="Polling interval in seconds",
+    )
+    parser.add_argument(
+        "--windowsize",
+        type=int,
+        default=30,
+        help="Window size for baseline calculation (default: 30)",
+    )
+    parser.add_argument("--output", help="Output image filename")
+
+    args = parser.parse_args()
+
+    if not os.path.exists(args.filename):
+        print(f"Error: File {args.filename} not found.")
+        sys.exit(1)
+
+    # 1. Read Data
+    iterations = []
+    pwms = []
+    temps = []
+    first_col_is_time = False
+
+    try:
+        with open(args.filename, "r") as f:
+            header = f.readline().strip()
+            if header.lower().startswith("time"):
+                first_col_is_time = True
+
+            for line in f:
                 parts = line.split()
                 if len(parts) >= 3:
-                    n_list.append(float(parts[0]))
-                    # Convert PWM from 0-255 to 0-100
-                    pwm_list.append(float(parts[1]) / 255.0 * 100.0)
-                    temp_list.append(float(parts[2]))
+                    try:
+                        val = float(parts[0])
+                        pwm = int(parts[1])
+                        temp = float(parts[2])
+                        iterations.append(val)
+                        pwms.append(pwm)
+                        temps.append(temp)
+                    except ValueError:
+                        continue
+    except Exception as e:
+        print(f"Error reading file: {e}")
+        sys.exit(1)
 
-        # Find where PWM rises (assuming simple step up)
-        if not pwm_list:
-            print(f"  No data found in {filename}.")
-            return
+    if not iterations:
+        print("No valid data found.")
+        sys.exit(1)
 
-        initial_pwm = pwm_list[0]
-        rise_index = -1
-        for i, val in enumerate(pwm_list):
-            if val > initial_pwm:
-                rise_index = i
+    if first_col_is_time:
+        times = iterations
+    else:
+        times = [n * args.interval for n in iterations]
+
+    # 2. Detect Step Trigger
+    step_idx = -1
+    delta_pwm = 0
+    if len(pwms) > 1:
+        initial_pwm = pwms[0]
+        for i in range(1, len(pwms)):
+            if pwms[i] != initial_pwm:
+                step_idx = i
+                delta_pwm = pwms[i] - pwms[i - 1]
                 break
 
-        if rise_index != -1:
-            print(
-                f"  PWM rise detected at index {rise_index} (n={n_list[rise_index]})"
-            )
-            start_idx_slice = max(0, rise_index - 50)
-            end_idx_slice = min(len(n_list), rise_index + 200)
+    if step_idx == -1:
+        print("Warning: No PWM step detected. Plotting all data.")
+        step_time = times[0]
+        start_idx = 0
+        y0 = temps[0]
+    else:
+        step_time = times[step_idx]
+        start_idx = step_idx
 
-            n_list = n_list[start_idx_slice:end_idx_slice]
-            pwm_list = pwm_list[start_idx_slice:end_idx_slice]
-            temp_list = temp_list[start_idx_slice:end_idx_slice]
+        # Calculate y0 (average of windowsize points before step)
+        avg_window = args.windowsize
+        if step_idx >= avg_window:
+            y0 = sum(temps[step_idx - avg_window : step_idx]) / avg_window
+        elif step_idx > 0:
+            y0 = sum(temps[:step_idx]) / step_idx
         else:
-            print("  No PWM rise detected, plotting all data.")
+            y0 = temps[0]
 
-        # Create the plot
-        fig, ax1 = plt.subplots(figsize=(12, 6))
+    # 3. Read Parameters
+    params_632 = None
+    params_lsm = None
 
-        color = "tab:red"
-        ax1.set_xlabel("Time step")
-        ax1.set_ylabel("Temperature (°C)", color=color)
-        ax1.plot(
-            n_list, temp_list, color=color, linewidth=1.5, label=sensor_name
+    # Construct FOPDT filename: plot_XYZ.txt -> fopdt_XYZ.txt
+    dirname = os.path.dirname(args.filename)
+    basename = os.path.basename(args.filename)
+    if basename.startswith("plot_"):
+        fopdt_basename = basename.replace("plot_", "fopdt_")
+    else:
+        fopdt_basename = "fopdt_" + basename
+
+    fopdt_path = os.path.join(dirname, fopdt_basename)
+
+    if os.path.exists(fopdt_path):
+        print(f"Reading parameters from {fopdt_path}...")
+        params_632, params_lsm = parse_fopdt_file(fopdt_path)
+    else:
+        print(f"Warning: FOPDT file {fopdt_path} not found.")
+
+    # 4. Filter Data for Plotting (Start from Step Trigger)
+    plot_times = times[start_idx:]
+    plot_temps = temps[start_idx:]
+
+    if not plot_times:
+        print("Error: No data to plot after step trigger.")
+        sys.exit(1)
+
+    t_start = plot_times[0]
+    t_end = plot_times[-1]
+
+    # 5. Plot
+    plt.figure(figsize=(10, 6))
+
+    # Real Data (Grey Dots)
+    plt.scatter(
+        plot_times,
+        plot_temps,
+        color="grey",
+        s=15,
+        alpha=0.6,
+        label="Actual Data",
+        zorder=2,
+    )
+
+    # 632 Method (Blue Dashed)
+    if params_632:
+        mt, mv = get_model_curve(
+            params_632, t_start, t_end, step_time, y0, delta_pwm
         )
-        ax1.tick_params(axis="y", labelcolor=color)
-        ax1.grid(True, linestyle="--", alpha=0.7)
+        label_str = f"632 Method (tau={params_632['tau']:.2f}s theta={params_632['theta']:.2f}s)"
+        plt.plot(
+            mt,
+            mv,
+            color="blue",
+            linestyle="--",
+            linewidth=2,
+            label=label_str,
+            zorder=3,
+        )
 
-        # Instantiate a second axes that shares the same x-axis
-        ax2 = ax1.twinx()
-        color = "tab:blue"
-        ax2.set_ylabel(
-            "Duty (%)", color=color
-        )  # we already handled the x-label with ax1
-        ax2.plot(
-            n_list,
-            pwm_list,
-            color=color,
-            linewidth=1.5,
+    # LSM Method (Red Solid)
+    if params_lsm:
+        mt, mv = get_model_curve(
+            params_lsm, t_start, t_end, step_time, y0, delta_pwm
+        )
+        label_str = f"LSM Method (tau={params_lsm['tau']:.2f}s theta={params_lsm['theta']:.2f}s)"
+        plt.plot(
+            mt,
+            mv,
+            color="red",
             linestyle="-",
-            label="Duty",
-        )
-        ax2.tick_params(axis="y", labelcolor=color)
-        ax2.set_ylim(0, 100)  # Set range to 0-100
-
-        plt.title(f"{sensor_name} Temperature vs Duty")
-
-        # Combine legends from both axes
-        lines1, labels1 = ax1.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        # Place legend below the plot
-        ax1.legend(
-            lines1 + lines2,
-            labels1 + labels2,
-            loc="upper center",
-            bbox_to_anchor=(0.5, -0.15),
-            ncol=2,
-            frameon=False,
+            linewidth=2,
+            label=label_str,
+            zorder=4,
         )
 
-        # Adjust layout to make room for the legend
-        plt.subplots_adjust(bottom=0.2)
+    plt.xlabel("Time(seconds)")
+    plt.ylabel("Temperature (C)")
 
-        plt.savefig(output_filename)
-        print(f"  Successfully saved plot to {output_filename}")
-        plt.close(fig)  # Close the figure to free memory
+    # Title using sensor name
+    sensor_name = basename.replace("plot_", "").replace(".txt", "")
+    plt.title(f"{sensor_name} Step Response Analysis")
 
+    plt.grid(True, linestyle="--", alpha=0.6)
+    plt.legend()
+
+    # Save Output
+    if args.output:
+        output_file = args.output
+    else:
+        output_file = os.path.join(
+            dirname, os.path.splitext(basename)[0] + ".png"
+        )
+
+    try:
+        plt.savefig(output_file)
+        print(f"Plot saved to {output_file}")
     except Exception as e:
-        print(f"  An error occurred processing {filename}: {e}")
+        print(f"Error saving plot: {e}")
+        sys.exit(1)
 
 
-# Find all matching files
-files = glob.glob("plot_*.txt")
-
-if not files:
-    print("No 'plot_*.txt' files found in the current directory.")
-else:
-    print(f"Found {len(files)} file(s).")
-    for f in files:
-        process_file(f)
+if __name__ == "__main__":
+    main()

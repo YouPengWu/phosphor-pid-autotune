@@ -157,7 +157,7 @@ Logs are generated in `/var/lib/phosphor-pid-autotune/log/<SensorName>/`:
 
 A Python script is provided in `tool/plot_curve.py` to visualize the
 experimental results. It parses the `plot_*.txt` output files and generates
-"Temperature vs Duty" plots.
+"Temperature vs Time" plots.
 
 ### Plot
 
