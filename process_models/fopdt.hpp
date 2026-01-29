@@ -37,4 +37,13 @@ FOPDTParameters identifyTwoPoint(
     double overrideInitialTemp = std::numeric_limits<double>::infinity(),
     double overrideFinalTemp = std::numeric_limits<double>::infinity());
 
+/**
+ * @brief Identify FOPDT parameters using Nelder-Mead Optimization.
+ */
+FOPDTParameters identifyOptimization(
+    const std::vector<double>& time, const std::vector<double>& temp,
+    double initialPwm, double stepPwm, double stepTime,
+    double overrideInitialTemp = std::numeric_limits<double>::infinity(),
+    double overrideFinalTemp = std::numeric_limits<double>::infinity());
+
 } // namespace autotune::process_models

@@ -259,6 +259,11 @@ void StepTrigger::runFOPDTAnalysis(const std::string& sensorName)
         expCfg.afterTriggerPwmDuty, data.stepTime, data.startMean,
         data.endMean);
 
+    auto paramsOpt = process_models::identifyOptimization(
+        data.times, data.temps, expCfg.initialPwmDuty,
+        expCfg.afterTriggerPwmDuty, data.stepTime, data.startMean,
+        data.endMean);
+
     std::string filename = logDir + "/fopdt_" + sensorName + ".txt";
     std::ofstream fFile(filename);
     fFile << "Name:" << sensorName << "\n\n";
@@ -271,7 +276,12 @@ void StepTrigger::runFOPDTAnalysis(const std::string& sensorName)
     fFile << "------LSM Method--------\n";
     fFile << "k=" << paramsLSM.k << "\n";
     fFile << "tau=" << paramsLSM.tau << "\n";
-    fFile << "theta=" << paramsLSM.theta << "\n";
+    fFile << "theta=" << paramsLSM.theta << "\n\n";
+
+    fFile << "------Optimization Method--------\n";
+    fFile << "k=" << paramsOpt.k << "\n";
+    fFile << "tau=" << paramsOpt.tau << "\n";
+    fFile << "theta=" << paramsOpt.theta << "\n";
 }
 
 void StepTrigger::runIMCPIDAnalysis(const std::string& sensorName)

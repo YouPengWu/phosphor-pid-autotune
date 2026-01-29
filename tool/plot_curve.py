@@ -23,27 +23,32 @@ def parse_fopdt_file(fopdt_path):
                 elif "LSM Method" in line:
                     current_section = "lsm"
                     params_lsm = {}
+                elif "Optimization Method" in line:
+                    current_section = "opt"
+                    params_opt = {}
 
                 if "=" in line:
                     key, val = line.split("=")
                     key = key.strip()
-                    val = val.strip()
-
                     try:
-                        f_val = float(val)
+                        f_val = float(val.strip())
                         if current_section == "632" and params_632 is not None:
                             params_632[key] = f_val
                         elif (
                             current_section == "lsm" and params_lsm is not None
                         ):
                             params_lsm[key] = f_val
+                        elif (
+                            current_section == "opt" and params_opt is not None
+                        ):
+                            params_opt[key] = f_val
                     except ValueError:
                         continue
     except Exception as e:
-        print(f"Warning: Could not read FOPDT file: {e}")
-        return None, None
+        print(f"Error parsing FOPDT file: {e}")
+        return None, None, None
 
-    return params_632, params_lsm
+    return params_632, params_lsm, params_opt
 
 
 def get_model_curve(p, t_start, t_end, step_time, y0, delta_pwm, dt=0.1):
@@ -116,12 +121,52 @@ def main():
                 first_col_is_time = True
 
             for line in f:
-                parts = line.split()
+                line = line.strip()
+                if not line:
+                    continue
+
+                # Detect delimiter
+                if "," in line:
+                    parts = line.split(",")
+                else:
+                    parts = line.split()
+
                 if len(parts) >= 3:
                     try:
-                        val = float(parts[0])
-                        pwm = int(parts[1])
-                        temp = float(parts[2])
+                        # Handle case where first column might be index 'n' or time
+                        # Based on file check: n,time,temp,pwm...
+                        # So time is index 1, pwm is index 3, temp is index 2
+                        # But legacy files might be: time pwm temp
+
+                        # Let's try to be smart.
+                        # If header existed and said "n,time,temp,pwm", we could map it.
+                        # But header parsing is outside this loop.
+
+                        # Heuristic:
+                        # If 3 columns: likely Time, PWM, Temp (legacy)
+                        # If >3 columns and comma separated: likely n, Time, Temp, PWM, ... (new format)
+
+                        if "," in line and len(parts) >= 4:
+                            # New format: n, time, temp, pwm
+                            # But wait, looking at file content: n,time,temp,pwm
+                            val = float(parts[1])  # time
+                            temp = float(parts[2])  # temp
+                            pwm = int(
+                                float(parts[3])
+                            )  # pwm (might be float in string)
+
+                            # If we are parsing this format, the value IS time.
+                            first_col_is_time = True
+
+                        elif len(parts) == 3:
+                            # Old format: val, pwm, temp
+                            val = float(parts[0])
+                            pwm = int(float(parts[1]))
+                            temp = float(parts[2])
+                        else:
+                            # Fallback or skipping
+                            continue
+
                         iterations.append(val)
                         pwms.append(pwm)
                         temps.append(temp)
@@ -172,12 +217,18 @@ def main():
     # 3. Read Parameters
     params_632 = None
     params_lsm = None
+    params_opt = None
 
-    # Construct FOPDT filename: plot_XYZ.txt -> fopdt_XYZ.txt
+    # Construct FOPDT filename:
+    # plot_XYZ.txt -> fopdt_XYZ.txt
+    # step_trigger_XYZ.txt -> fopdt_XYZ.txt
     dirname = os.path.dirname(args.filename)
     basename = os.path.basename(args.filename)
+
     if basename.startswith("plot_"):
         fopdt_basename = basename.replace("plot_", "fopdt_")
+    elif basename.startswith("step_trigger_"):
+        fopdt_basename = basename.replace("step_trigger_", "fopdt_")
     else:
         fopdt_basename = "fopdt_" + basename
 
@@ -185,7 +236,7 @@ def main():
 
     if os.path.exists(fopdt_path):
         print(f"Reading parameters from {fopdt_path}...")
-        params_632, params_lsm = parse_fopdt_file(fopdt_path)
+        params_632, params_lsm, params_opt = parse_fopdt_file(fopdt_path)
     else:
         print(f"Warning: FOPDT file {fopdt_path} not found.")
 
@@ -219,7 +270,7 @@ def main():
         mt, mv = get_model_curve(
             params_632, t_start, t_end, step_time, y0, delta_pwm
         )
-        label_str = f"632 Method (tau={params_632['tau']:.2f}s theta={params_632['theta']:.2f}s)"
+        label_str = f"TwoPoint (k={params_632['k']:.3f}, tau={params_632['tau']:.1f}, theta={params_632['theta']:.1f})"
         plt.plot(
             mt,
             mv,
@@ -230,12 +281,34 @@ def main():
             zorder=3,
         )
 
-    # LSM Method (Red Solid)
+    # LSM Method (Red Dashed - wait, user previous preference was Red Solid for LSM in batch, but legacy was different. User said "same as run_and_plot_batch".
+    # In run_and_plot_batch: TwoPoint=Blue Dashed, LSM=Red Solid, Opt=Green Solid.
+    # I will follow run_and_plot_batch style which I established in previous turns and user liked.)
+    # Actually wait, let's look at the file content I'm replacing.
+    # Original file had LSM as Red Solid. TwoPoint as Blue Dashed.
+
+    # LSM Method (Green Solid)
     if params_lsm:
         mt, mv = get_model_curve(
             params_lsm, t_start, t_end, step_time, y0, delta_pwm
         )
-        label_str = f"LSM Method (tau={params_lsm['tau']:.2f}s theta={params_lsm['theta']:.2f}s)"
+        label_str = f"LSM (k={params_lsm['k']:.3f}, tau={params_lsm['tau']:.1f}, theta={params_lsm['theta']:.1f})"
+        plt.plot(
+            mt,
+            mv,
+            color="green",
+            linestyle="-",
+            linewidth=2,
+            label=label_str,
+            zorder=4,
+        )
+
+    # Optimization Method (Red Solid - Most Accurate)
+    if params_opt:
+        mt, mv = get_model_curve(
+            params_opt, t_start, t_end, step_time, y0, delta_pwm
+        )
+        label_str = f"Nelder-Mead (k={params_opt['k']:.3f}, tau={params_opt['tau']:.1f}, theta={params_opt['theta']:.1f})"
         plt.plot(
             mt,
             mv,
@@ -243,7 +316,7 @@ def main():
             linestyle="-",
             linewidth=2,
             label=label_str,
-            zorder=4,
+            zorder=5,
         )
 
     plt.xlabel("Time(seconds)")
