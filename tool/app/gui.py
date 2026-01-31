@@ -29,7 +29,26 @@ class FOPDTApp:
     def __init__(self, root):
         self.root = root
         self.root.title("FOPDT Analysis Tool")
-        self.root.geometry("1800x1200")
+        
+        # --- Cross-Platform Maximize & DPI Awareness ---
+        try:
+            # high-dpi awareness for Windows
+            from ctypes import windll
+            windll.shcore.SetProcessDpiAwareness(1)
+        except Exception:
+            pass
+
+        # maximize window
+        try:
+            # Windows
+            self.root.state('zoomed')
+        except:
+            try:
+                # Linux
+                self.root.attributes('-zoomed', True)
+            except:
+                # Fallback
+                self.root.geometry("1200x800")
 
         # --- Layout ---
         # Main Frame
@@ -37,10 +56,10 @@ class FOPDTApp:
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         # Left Panel (Controls & Info)
+        # Removed pack_propagate(False) to allow auto-sizing
         left_panel = tk.Frame(
-            main_frame, width=400, bg="#f0f0f0"
-        )  # Widen panel slightly
-        left_panel.pack_propagate(False)  # Prevent resizing based on content
+            main_frame, bg="#f0f0f0"
+        )  
         left_panel.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=5)
 
         # Right Panel (Plot)
@@ -447,7 +466,7 @@ class FOPDTApp:
         # Author Credits
         self.lbl_author = tk.Label(
             left_panel,
-            text="       YouPeng, Wu (twpeng50606@gmail.com)  2026",
+            text="       YouPeng, Wu (twpeng50606@gmail.com)  2026  v1.00",
             font=("Arial", 9, "italic"),
             bg="#f0f0f0",
             fg="#666",
@@ -1261,64 +1280,6 @@ class FOPDTApp:
         except Exception as e:
             traceback.print_exc()
             messagebox.showerror("Error", f"Failed to save plot:\n{e}")
-
-            # Avoid division by zero or extreme gains if theta is 0
-            # If theta is negligible (e.g. LSM often gives 0), basic IMC formula produces infinite gain.
-            # We treat theta as at least 0.1s for tuning stability in this edge case.
-            effective_theta = theta
-            if effective_theta < 0.1:
-                effective_theta = 0.1
-
-            # Epsilon is now direct
-            # But wait, original code used epsilon = effective_theta * ratio
-            # Here we already have Epsilon from user.
-
-            # --- 1. PID Controller (IMC) ---
-            # formula uses original params but we must use effective_theta/epsilon for stability
-
-            numerator = 2.0 * tau + effective_theta
-            denominator = k * (2.0 * epsilon + effective_theta)
-
-            if abs(denominator) < 1e-9:
-                kc = 0
-            else:
-                kc = numerator / denominator
-
-            tau_i = tau + effective_theta / 2.0
-            tau_d = (tau * effective_theta) / (2.0 * tau + effective_theta)
-
-            kp = kc
-            ki = kc / tau_i if abs(tau_i) > 1e-9 else 0
-            kd = kc * tau_d
-
-            self.lbl_pid_res.config(
-                text=f"Kp: {kp:.5f},  Ki: {ki:.5f},  Kd: {kd:.5f}", fg="blue"
-            )
-
-            # --- 2. Improved PI Controller (IMC Improved) ---
-            # Kc = (2*tau + theta) / (2*k*epsilon)
-
-            denom_pi = 2.0 * k * epsilon
-            if abs(denom_pi) < 1e-9:
-                kc_pi = 0
-            else:
-                kc_pi = (2.0 * tau + effective_theta) / denom_pi
-
-            tau_i_pi = tau + effective_theta / 2.0
-
-            kp_pi = kc_pi
-            ki_pi = kc_pi / tau_i_pi if abs(tau_i_pi) > 1e-9 else 0
-
-            self.lbl_pi_res.config(
-                text=f"Kp: {kp_pi:.5f},  Ki: {ki_pi:.5f}", fg="green"
-            )
-
-            # Log to ensure it's working
-            # print(f"Update Tuning: Ratio={ratio}, Kp={kp}")
-
-        except Exception as e:
-            traceback.print_exc()
-            self.lbl_pid_res.config(text="Error Calc")
 
 
 if __name__ == "__main__":
