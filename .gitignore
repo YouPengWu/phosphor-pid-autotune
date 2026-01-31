@@ -2,3 +2,11 @@ build*/
 !buildjson/
 subprojects/*
 !subprojects/*.wrap
+
+# Python Packaging
+/tool/dist/
+/tool/build/
+/tool/venv/
+/*.spec
+*.pyc
+__pycache__/
