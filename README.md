@@ -140,15 +140,12 @@ python3 tool/main.py
 
 ### Analysis Example
 
-The GUI tool allows you to visualize experimental data and identify FOPDT parameters.
+The GUI tool allows you to visualize experimental data and identify FOPDT
+parameters.
 
-![GUI Demo](docs/images/tool_demo.png)
+<img src="docs/images/tool_demo.png" width="600" alt="GUI Demo">
 
-*Figure 1: FOPDT Analysis Tool Interface*
-
-![Plot Example](docs/images/plot_example.png)
-
-*Figure 2: Identified FOPDT Curve vs. Actual Data*
+_Figure 1: FOPDT Analysis Tool Interface_
 
 ## Mathematical Details
 
