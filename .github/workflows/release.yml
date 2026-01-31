@@ -45,10 +45,10 @@ jobs:
 
       - name: Build with PyInstaller (Windows)
         if: matrix.os == 'windows-latest'
+        shell: cmd
         run: |
           cd tool
           pyinstaller --onefile --windowed --name fopdt_tuner_win --clean main.py --paths ..
-          move dist/fopdt_tuner_win.exe dist/fopdt_tuner_win.exe
 
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
