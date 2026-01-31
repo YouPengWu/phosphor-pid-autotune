@@ -1,6 +1,5 @@
 #include "step_trigger.hpp"
 
-#include "../PID_tuning_methods/imc.hpp"
 #include "../core/dbus_io.hpp"
 #include "../core/utils.hpp"
 #include "../process_models/fopdt.hpp"
@@ -14,12 +13,11 @@ namespace autotune::experiment
 
 namespace fs = std::filesystem;
 
-StepTrigger::StepTrigger(
-    sdbusplus::bus_t& b, const std::string& objectPath, // Match definition
-    const config::BasicSetting& basic, const config::ExperimentConfig& exp,
-    const config::ModelConfig& model) :
-    bus(b), objectPath(objectPath), basicCfg(basic), expCfg(exp),
-    modelCfg(model)
+StepTrigger::StepTrigger(sdbusplus::bus_t& b,
+                         const std::string& objectPath, // Match definition
+                         const config::BasicSetting& basic,
+                         const config::ExperimentConfig& exp) :
+    bus(b), objectPath(objectPath), basicCfg(basic), expCfg(exp)
 {}
 
 void StepTrigger::setEnabled(bool enable)
@@ -67,9 +65,6 @@ void StepTrigger::start()
     logFile.open(filename, std::ios::out | std::ios::trunc);
     logFile << "n,time,temp,pwm,slope,rmse,mean_temp\n";
 
-    // Start plot logger
-    plotLogger.start(logDir, expCfg.tempSensor);
-
     dbusio::writePwmAllByInput(expCfg.initialFanSensors, expCfg.initialPwmDuty);
 
     std::cerr << "[StepTrigger] Started " << expCfg.tempSensor
@@ -82,7 +77,6 @@ void StepTrigger::stop()
     state = State::Idle;
     if (logFile.is_open())
         logFile.close();
-    plotLogger.close(); // Close plot file
 }
 
 void StepTrigger::tick()
@@ -136,11 +130,9 @@ void StepTrigger::iteration()
 
     // Continuous Plot Logging
     int rate = basicCfg.plotSamplingRate;
-    if (rate <= 0)
-        rate = 1;
     if (dp.n % rate == 0)
     {
-        plotLogger.log(dp.time, dp.pwm, dp.temp);
+        // plotLogger logic removed
     }
 
     currentIteration++;
@@ -174,7 +166,6 @@ void StepTrigger::finishExperiment()
 {
     std::cout << "[StepTrigger] Finished " << expCfg.tempSensor << "\n";
     logFile.close();
-    plotLogger.close(); // Ensure output is saved
     runAnalysis();
     enabled = false;
     running = false;
@@ -184,7 +175,6 @@ void StepTrigger::runAnalysis()
 {
     runNoiseAnalysis(expCfg.tempSensor);
     runFOPDTAnalysis(expCfg.tempSensor);
-    runIMCPIDAnalysis(expCfg.tempSensor);
 }
 
 StepTrigger::AnalysisData StepTrigger::prepareAnalysisData()
@@ -282,27 +272,6 @@ void StepTrigger::runFOPDTAnalysis(const std::string& sensorName)
     fFile << "k=" << paramsOpt.k << "\n";
     fFile << "tau=" << paramsOpt.tau << "\n";
     fFile << "theta=" << paramsOpt.theta << "\n";
-}
-
-void StepTrigger::runIMCPIDAnalysis(const std::string& sensorName)
-{
-    auto data = prepareAnalysisData();
-
-    auto params = process_models::identifyFOPDT(
-        data.times, data.temps, expCfg.initialPwmDuty,
-        expCfg.afterTriggerPwmDuty, data.stepTime, data.startMean,
-        data.endMean);
-
-    auto results = tuning::calculateIMC(params, modelCfg.epsilonOverTheta);
-
-    std::string filename = logDir + "/imc_" + sensorName + ".txt";
-    std::ofstream iFile(filename);
-    iFile << "epsilon,epsilon_over_theta,type,Kp,Ki,Kd\n";
-    for (const auto& r : results)
-    {
-        iFile << r.epsilon << "," << r.ratio << "," << r.type << "," << r.kp
-              << "," << r.ki << "," << r.kd << "\n";
-    }
 }
 
 } // namespace autotune::experiment

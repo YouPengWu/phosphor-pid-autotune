@@ -99,23 +99,5 @@
             "aftertriggeriterations": 600,
             "tempsensor": "INLET_OCP_TEMP1"
         }
-    ],
-    "process_models": [
-        {
-            "epsilon_over_theta": [1.7, 2.5, 10.0, 20.0],
-            "tempsensor": "CPU0_TEMP"
-        },
-        {
-            "epsilon_over_theta": [1.7, 2.5, 10.0, 20.0],
-            "tempsensor": "CPU1_TEMP"
-        },
-        {
-            "epsilon_over_theta": [1.7, 2.5, 10.0, 20.0],
-            "tempsensor": "INLET_OCP_TEMP0"
-        },
-        {
-            "epsilon_over_theta": [1.7, 2.5, 10.0, 20.0],
-            "tempsensor": "INLET_OCP_TEMP1"
-        }
     ]
 }

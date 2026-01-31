@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../buildjson/config.hpp"
-#include "../plot/plot_data.hpp"
 
 #include <sdbusplus/bus.hpp>
 
@@ -40,8 +39,7 @@ class StepTrigger
     StepTrigger(sdbusplus::bus_t& bus,
                 const std::string& objectPath, // Match definition
                 const config::BasicSetting& basic,
-                const config::ExperimentConfig& exp,
-                const config::ModelConfig& model);
+                const config::ExperimentConfig& exp);
 
     void tick();
     void setEnabled(bool enabled);
@@ -60,7 +58,6 @@ class StepTrigger
     // Sub-analysis functions
     void runNoiseAnalysis(const std::string& sensorName);
     void runFOPDTAnalysis(const std::string& sensorName);
-    void runIMCPIDAnalysis(const std::string& sensorName);
 
     struct AnalysisData
     {
@@ -76,7 +73,6 @@ class StepTrigger
     std::string objectPath;
     config::BasicSetting basicCfg;
     config::ExperimentConfig expCfg;
-    config::ModelConfig modelCfg;
 
     bool enabled = false;
     bool running = false;
@@ -91,8 +87,6 @@ class StepTrigger
 
     std::string logDir;
     std::ofstream logFile;
-
-    plot::PlotLogger plotLogger; // Added PlotLogger
 };
 
 } // namespace autotune::experiment

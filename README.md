@@ -19,55 +19,32 @@ and **IMC PID** rules is in **[`docs/fopdt.md`](docs/fopdt.md)**.
   DBus fan/sensor objects.
 - **Process Identification**: Identifies Plant Gain (K), Time Constant (Tau),
   and Dead Time (Theta) using the Two-Point Method.
-- **IMC Tuning**: Calculates Kp, Ki, Kd based on a user-configurable
-  `Tau / Epsilon` robustness ratio.
+- **IMC Tuning**: Calculates optimal PID gains (Kp, Ki, Kd) interactively using
+  the GUI tool based on the identified FOPDT model.
 - **Service Management**: Automatically stops the conflicting
   `phosphor-pid-control` service during tuning and restarts it afterwards.
-- **Data Logging**: Generates detailed CSV logs and step-response plots for
-  post-analysis.
+- **Data Logging**: Generates detailed text-based logs (TXT format) for
+  post-analysis using the provided GUI tool.
 
 ## Repository Layout
 
 ```
 phosphor-pid-autotune
-├── buildjson
-│   ├── config.cpp                   # JSON config loader
-│   └── config.hpp                   # Config structs
-├── configs
-│   └── autotune.json                # Runtime configuration
-├── core
-│   ├── dbus_io.cpp                  # DBus I/O: read temps / write PWM
-│   ├── dbus_io.hpp                  # DBus I/O headers
-│   ├── utils.cpp                    # General utilities
-│   └── utils.hpp                    # Utility headers
-├── dbus
-│   └── constants.hpp                # DBus service/path constants
-├── docs
-│   └── fopdt.md                     # Documentation for FOPDT math
-├── experiment
-│   ├── step_trigger.cpp             # Step test logic (State Machine)
-│   └── step_trigger.hpp             # Experiment API
-├── PID_tuning_methods
-│   ├── imc.cpp                      # IMC tuning calculation
-│   └── imc.hpp                      # IMC headers
-├── process_models
-│   ├── fopdt.cpp                    # FOPDT identification
-│   └── fopdt.hpp                    # FOPDT headers
-├── plot
-│   ├── plot_data.cpp                # Plot logging logic
-│   └── plot_data.hpp                # Plot headers
-├── tool
-│   ├── plot_curve.py                # Plotting script
-│   └── virtual_temp_plot.png        # Example plot
-├── .clang-format                    # Code style config
-├── .clang-tidy                      # Static analysis config
-├── .gitignore                       # Git ignore rules
-├── LICENSE                          # Apache-2.0 License
-├── OWNERS                           # Component maintainers
-├── README.md                        # This file
-├── main.cpp                         # Main entry point & DBus service
-├── meson.build                      # Meson build script
-└── phosphor-pid-autotune.service.in # Systemd unit template
+├── buildjson/                  # JSON config loader
+├── configs/                    # Runtime configuration (autotune.json)
+├── core/                       # DBus I/O and general utilities
+├── dbus/                       # DBus service/path constants
+├── docs/                       # FOPDT math documentation & images
+├── experiment/                 # Step test logic (State Machine)
+├── process_models/             # FOPDT identification logic
+├── solvers/                    # Optimization solvers (Nelder-Mead, etc.)
+├── tool/                       # Python GUI Analysis Tool
+│   ├── app/                    # GUI package source
+│   └── main.py                 # Tool entry point
+├── main.cpp                    # Main entry point & DBus service
+├── meson.build                 # Build configuration
+├── phosphor-pid-autotune.bb    # Yocto recipe
+└── phosphor-pid-autotune.service.in
 ```
 
 ## Configuration
@@ -82,32 +59,29 @@ argument).
 {
   "basicsetting": [
     {
-      "pollinterval": 1,
-      "windowsize": 60,
-      "plot_sampling_rate": 1
+      "pollinterval": 0.5,
+      "windowsize": 120,
+      "plot_sampling_rate": 5
     }
   ],
   "experiment": [
     {
-      "initialfansensors": [
-        "Virtual_PWM1",
-        "Virtual_PWM2",
-        "Virtual_PWM3",
-        "Virtual_PWM4",
-        "Virtual_PWM5"
-      ],
+      "initialfansensors": ["PWM_DUTY0", "PWM_DUTY1", ...],
       "initialpwmduty": 179,
-      "aftertriggerfansensors": ["Virtual_PWM3", "Virtual_PWM4"],
+      "aftertriggerfansensors": ["PWM_DUTY4", "PWM_DUTY5", ...],
       "aftertriggerpwmduty": 204,
-      "initialiterations": 300,
-      "aftertriggeriterations": 300,
-      "tempsensor": "Virtual_Temp1"
-    }
-  ],
-  "process_models": [
+      "initialiterations": 600,
+      "aftertriggeriterations": 600,
+      "tempsensor": "CPU0_TEMP"
+    },
     {
-      "epsilon_over_theta": [1.7, 2.5, 10.0, 20.0],
-      "tempsensor": "Virtual_Temp1"
+      "initialfansensors": ["PWM_DUTY0", "PWM_DUTY1", ...],
+      "initialpwmduty": 150,
+      "aftertriggerfansensors": ["PWM_DUTY0", "PWM_DUTY1", ...],
+      "aftertriggerpwmduty": 180,
+      "initialiterations": 600,
+      "aftertriggeriterations": 600,
+      "tempsensor": "CPU1_TEMP"
     }
   ]
 }
@@ -127,16 +101,15 @@ idle state waiting for a D-Bus trigger. Note: When the experiment starts,
 
 ### 2. Trigger the Experiment
 
-Use `busctl` to enable the experiment for a specific sensor (e.g.,
-`Virtual_Temp1`):
+**Trigger a specific sensor** (e.g., `CPU0_TEMP`):
 
 ```bash
 busctl set-property xyz.openbmc_project.PIDAutotune \
-    /xyz/openbmc_project/PIDAutotune/Virtual_Temp1 \
+    /xyz/openbmc_project/PIDAutotune/CPU0_TEMP \
     xyz.openbmc_project.PIDAutotune.steptrigger Enabled b true
 ```
 
-Or trigger **all configured experiments** simultaneously (use with caution):
+**Trigger ALL configured sensors** simultaneously:
 
 ```bash
 busctl set-property xyz.openbmc_project.PIDAutotune \
@@ -148,20 +121,34 @@ busctl set-property xyz.openbmc_project.PIDAutotune \
 
 Logs are generated in `/var/lib/phosphor-pid-autotune/log/<SensorName>/`:
 
-- `step_trigger_<SensorName>.txt`: Raw time-series data (Temp, PWM).
-- `fopdt_<SensorName>.txt`: Identified model parameters (K, Tau, Theta).
-- `imc_<SensorName>.txt`: Calculated PID gains for different robustness factors.
-- `step_trigger_<SensorName>_plot.txt`: Data formatted for plotting.
+- `step_trigger_<SensorName>.txt`: Raw time-series data (Temp, PWM, Slope,
+  RMSE).
+- `fopdt_<SensorName>.txt`: Identified model parameters (632, LSM, and
+  Optimization).
+- `noise_<SensorName>.txt`: Noise and stability analysis summary.
 
 ## Analysis Tools
 
-A Python script is provided in `tool/plot_curve.py` to visualize the
-experimental results. It parses the `plot_*.txt` output files and generates
-"Temperature vs Time" plots.
+A Python GUI tool is provided to visualize the results and calculate PID gains
+interactively.
 
-### Plot
+### Run the GUI
 
-![tool/virtual_temp_plot.png](tool/virtual_temp_plot.png)
+```bash
+python3 tool/main.py
+```
+
+### Analysis Example
+
+The GUI tool allows you to visualize experimental data and identify FOPDT parameters.
+
+![GUI Demo](docs/images/tool_demo.png)
+
+*Figure 1: FOPDT Analysis Tool Interface*
+
+![Plot Example](docs/images/plot_example.png)
+
+*Figure 2: Identified FOPDT Curve vs. Actual Data*
 
 ## Mathematical Details
 

@@ -1,8 +1,8 @@
 #pragma once
 
+#include <map>
 #include <string>
 #include <vector>
-#include <map>
 
 namespace autotune::config
 {
@@ -25,17 +25,10 @@ struct ExperimentConfig
     std::string tempSensor;
 };
 
-struct ModelConfig
-{
-    std::vector<double> epsilonOverTheta;
-    std::string tempSensor;
-};
-
 struct Config
 {
     BasicSetting basic;
     std::vector<ExperimentConfig> experiments;
-    std::map<std::string, ModelConfig> models;
 };
 
 Config loadConfig(const std::string& path);

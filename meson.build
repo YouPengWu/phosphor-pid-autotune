@@ -32,8 +32,7 @@ srcs = [
     'buildjson/config.cpp',
     'experiment/step_trigger.cpp',
     'process_models/fopdt.cpp',
-    'PID_tuning_methods/imc.cpp',
-    'plot/plot_data.cpp',
+
     'main.cpp',
 ]
 
